@@ -1,0 +1,32 @@
+{
+  "name": "kryptofunding_backend",
+  "version": "1.0.0",
+  "description": "backend for KryptoFunding app",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc -b ",
+    "start": " bun run ./dist/index.js",
+    "dev": "bun run build && bun run start"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "nodemailer": "^8.0.5",
+    "typescript": "^6.0.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.0",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.21.0"
+  }
+}

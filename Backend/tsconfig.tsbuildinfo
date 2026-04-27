@@ -1,0 +1,1 @@
+{"root":["./src/index.ts","./src/routes/api.ts","./src/routes/user/user.ts","./src/service/Drizzle/index.ts","./src/service/Drizzle/db/schema.ts","./src/service/email/email.ts"],"version":"6.0.3"}
