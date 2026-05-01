@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors";
 import apiRouter from "./routes/api.js";
 
 dotenv.config({
@@ -9,6 +10,7 @@ dotenv.config({
 const port = process.env.BACKEND_PORT || 3005;
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
