@@ -6,16 +6,13 @@ const Footer = () => {
     <footer className="bg-white dark:bg-[#090909] border-t border-gray-300 dark:border-[#3b353c] py-12 mt-20 transition-colors duration-300">
       <div className="w-11/12 max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start gap-10">
         
-        {/* Brand Section */}
         <div className="max-w-xs">
           <p className="text-3xl font-black text-amber-500 dark:text-[#e7c965] mb-4 uppercase tracking-tighter">Krypto</p>
           <p className="text-gray-600 dark:text-[#82717b] mb-6">
             The ultimate simulator platform to train your trading mindset and hone your edge in a risk-free environment.
           </p>
-          {/*  */}
         </div>
 
-        {/* Links Section */}
         <div className="flex flex-col sm:flex-row gap-12 md:gap-24">
           <div>
             <h3 className="text-gray-900 dark:text-white font-black uppercase tracking-widest mb-4">Platform</h3>

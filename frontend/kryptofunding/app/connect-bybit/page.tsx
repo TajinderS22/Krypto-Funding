@@ -73,7 +73,6 @@ export default function ConnectBybitPage() {
 
   return (
     <div className="bg-white dark:bg-[#090909] font-sans text-gray-900 dark:text-[#c1cfc1] min-h-screen flex flex-col selection:bg-[#8254ee] selection:text-white overflow-hidden relative transition-colors duration-300">
-      {/* Subtle Background Elements */}
       <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-[#8254ee]/5 blur-[150px] rounded-full pointer-events-none transition-all duration-1000 ease-in-out"></div>
       <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#e7c965]/5 blur-[120px] rounded-full pointer-events-none transition-all duration-1000 ease-in-out"></div>
 
@@ -81,7 +80,6 @@ export default function ConnectBybitPage() {
       
       <div className="flex-1 w-11/12 max-w-7xl mx-auto py-24 md:py-32 relative z-10">
         
-        {/* Header Section styled like Home Page */}
         <div className="mb-20 md:mb-32 flex flex-col md:flex-row justify-between items-end border-b border-gray-300 dark:border-[#3b353c] pb-8 transition-colors duration-300">
           <div>
             <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-linear-to-l from-amber-500 to-[#8254ee] dark:from-[#e7c965] dark:to-[#8254ee] tracking-tighter uppercase mb-4 drop-shadow-sm transition-colors duration-300">
@@ -98,7 +96,6 @@ export default function ConnectBybitPage() {
 
         <div className="flex flex-col lg:flex-row gap-16 lg:gap-24">
           
-          {/* Left Sidebar - Stark, Typographic Navigation */}
           <div className="w-full lg:w-1/3 shrink-0">
             <div className="flex flex-col border-l border-gray-300 dark:border-[#3b353c] transition-colors duration-300">
               {steps.map((step, idx) => {
@@ -123,7 +120,6 @@ export default function ConnectBybitPage() {
             </div>
           </div>
 
-          {/* Right Content Area - Brutalist, Raw Details */}
           <div className="w-full lg:w-2/3 flex flex-col justify-center min-h-[500px]">
             <div className="animate-in fade-in slide-in-from-right-8 duration-700" key={activeStep}>
               
@@ -144,7 +140,6 @@ export default function ConnectBybitPage() {
                 ))}
               </div>
 
-              {/* Action Buttons */}
               <div className="mt-16 flex flex-col sm:flex-row gap-6">
                 {activeStep < steps.length - 1 ? (
                   <button 

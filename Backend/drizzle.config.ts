@@ -6,8 +6,6 @@ dotenv.config({
     path:"../.env"
 })
 
-console.log(process.env.DATABASE_URL);
-
 export default defineConfig({
   out: "./drizzle",
   schema: "./src/service/Drizzle/db/schema.ts",
