@@ -1,16 +1,16 @@
-export type Challenge={
-    id: string,
-  creator_id ?: string,
-  title: string,
-  description: string,
-  value: number,
-  price: number,
-  steps?: number | null,
-  drawdown?: number | null,
-  target?: number | null,
-  created_at: Date,
-  updated_at: Date
-}
+export type Challenge = {
+  id: string;
+  creator_id?: string;
+  title: string;
+  description: string;
+  value: number;
+  price: number;
+  steps?: number | null;
+  drawdown?: number | null;
+  target?: number | null;
+  created_at: Date;
+  updated_at: Date;
+};
 
 export type ChallengeStatus = {
   id: number;
@@ -19,6 +19,8 @@ export type ChallengeStatus = {
   currentStepStatus: number | null;
   steps: number | null;
   hasApiKey: boolean;
+  value: number;
+  currentBalance: number; 
   updated_at: string;
 };
 

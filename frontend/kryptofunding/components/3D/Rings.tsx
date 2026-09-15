@@ -11,7 +11,9 @@ const Rings = () => {
 
   useEffect(() => {
     if (materialRef.current) {
-      materialRef.current.color.setHex(resolvedTheme === 'light' ? 0x808080  : 0x040404);
+      materialRef.current.color.setHex(
+        resolvedTheme === "light" ? 0x808080 : 0x040404,
+      );
     }
   }, [resolvedTheme]);
 
@@ -35,7 +37,7 @@ const Rings = () => {
     const geo = new THREE.TorusGeometry(1, 0.34, 10, 100);
 
     const material = new THREE.MeshStandardMaterial({
-      color: resolvedTheme === 'light' ? 0x808080 : 0x040404,
+      color: resolvedTheme === "light" ? 0x808080 : 0x040404,
       roughness: 0.2,
       metalness: 0.1,
     });
@@ -131,12 +133,25 @@ const Rings = () => {
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', width: "100%", height: "100%", minHeight: 0, minWidth: 0 }}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        minWidth: 0,
+      }}
     >
       <canvas
         id="draw"
         ref={canvasRef}
-        style={{ position: 'absolute', top: 0, left: 0, display: "block", width: "100%", height: "100%" }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          display: "block",
+          width: "100%",
+          height: "100%",
+        }}
       />
     </div>
   );

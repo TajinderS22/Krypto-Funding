@@ -39,7 +39,7 @@ const UniquePlanSelector = () => {
             steps: c.steps ?? 1,
             drawdown: c.drawdown ?? null,
             target: c.target ?? null,
-          })
+          }),
         );
         setDbChallenges(mapped);
       } catch {
@@ -49,9 +49,16 @@ const UniquePlanSelector = () => {
     fetchChallenges();
   }, []);
 
-  const getChallengeForConfig = (s: number, stepCount: number, dd: number): DBChallenge | undefined => {
+  const getChallengeForConfig = (
+    s: number,
+    stepCount: number,
+    dd: number,
+  ): DBChallenge | undefined => {
     return dbChallenges.find(
-      (c) => Number(c.value) === s && (c.steps ?? 1) === stepCount && (c.drawdown ?? 10) === dd
+      (c) =>
+        Number(c.value) === s &&
+        (c.steps ?? 1) === stepCount &&
+        (c.drawdown ?? 10) === dd,
     );
   };
 
@@ -63,7 +70,7 @@ const UniquePlanSelector = () => {
       target: `${maxDrawdown}%`,
       daily: `${dailyDrawdown}%`,
       overall: `${maxDrawdown}%`,
-      fee: match?.price ?? ((size / 5000) * 2 - 0.01),
+      fee: match?.price ?? (size / 5000) * 2 - 0.01,
     };
   };
 
@@ -80,12 +87,12 @@ const UniquePlanSelector = () => {
 
   return (
     <div className="w-full py-32 bg-gray-50 dark:bg-linear-to-b dark:from-[#090909] dark:to-[#000000] relative overflow-hidden transition-colors duration-300">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/5 dark:bg-[#8254ee]/10 blur-[120px] rounded-full pointer-events-none transition-all duration-1000 ease-in-out" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/5 dark:bg-[#a855f7]/10 blur-[120px] rounded-md pointer-events-none transition-all duration-1000 ease-in-out" />
 
       <div className="w-11/12 max-w-7xl mx-auto relative z-10">
         <div className="flex flex-col md:flex-row justify-between items-end mb-20 border-b border-gray-300 dark:border-[#3b353c] pb-8 transition-colors duration-300">
           <div>
-            <h2 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-l from-amber-500 to-purple-600 dark:from-[#e7c965] dark:to-[#8254ee] tracking-tighter uppercase mb-4 drop-shadow-sm">
+            <h2 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-l from-amber-400 to-purple-500 dark:from-[#fbbf24] dark:to-[#a855f7] tracking-tighter uppercase mb-4 drop-shadow-sm">
               Simulator Access
             </h2>
             <p className="text-gray-600 dark:text-[#82717b] text-xl md:text-2xl font-light">
@@ -98,16 +105,16 @@ const UniquePlanSelector = () => {
             onValueChange={(val) => setIsTwoStep(val === "two")}
             className="mt-8 md:mt-0"
           >
-            <TabsList className="flex bg-white dark:bg-[#090909] p-1.5 rounded-full ring-1 ring-gray-300 dark:ring-[#3b353c] shadow-sm dark:shadow-inner dark:shadow-black h-auto transition-colors duration-300">
+            <TabsList className="flex bg-white dark:bg-[#090909] p-1.5 rounded-md ring-1 ring-gray-300 dark:ring-[#3b353c] shadow-sm dark:shadow-inner dark:shadow-black h-auto transition-colors duration-300">
               <TabsTrigger
                 value="one"
-                className="px-8 py-3 rounded-full text-sm font-bold uppercase tracking-widest transition-all duration-300 data-[state=active]:bg-gray-900 data-[state=active]:text-white dark:data-[state=active]:bg-[#c1cfc1] dark:data-[state=active]:text-[#090909] data-[state=active]:shadow-md dark:data-[state=active]:shadow-[0_0_20px_rgba(193,207,193,0.4)] data-[state=active]:scale-105 text-gray-500 dark:text-[#82717b] hover:text-gray-900 dark:hover:text-[#c1cfc1] data-[state=inactive]:hover:bg-gray-100 dark:data-[state=inactive]:hover:bg-[#3b353c]/50"
+                className="px-8 py-3 rounded-md text-sm font-bold uppercase tracking-widest transition-all duration-300 data-[state=active]:bg-gray-900 data-[state=active]:text-white dark:data-[state=active]:bg-[#c1cfc1] dark:data-[state=active]:text-[#090909] data-[state=active]:shadow-md dark:data-[state=active]:shadow-[0_0_20px_rgba(193,207,193,0.4)] data-[state=active]:scale-105 text-gray-500 dark:text-[#82717b] hover:text-gray-900 dark:hover:text-[#c1cfc1] data-[state=inactive]:hover:bg-gray-100 dark:data-[state=inactive]:hover:bg-[#3b353c]/50"
               >
                 1-Step Sim
               </TabsTrigger>
               <TabsTrigger
                 value="two"
-                className="px-8 py-3 rounded-full text-sm font-bold uppercase tracking-widest transition-all duration-300 data-[state=active]:bg-gray-900 data-[state=active]:text-white dark:data-[state=active]:bg-[#c1cfc1] dark:data-[state=active]:text-[#090909] data-[state=active]:shadow-md dark:data-[state=active]:shadow-[0_0_20px_rgba(193,207,193,0.4)] data-[state=active]:scale-105 text-gray-500 dark:text-[#82717b] hover:text-gray-900 dark:hover:text-[#c1cfc1] data-[state=inactive]:hover:bg-gray-100 dark:data-[state=inactive]:hover:bg-[#3b353c]/50"
+                className="px-8 py-3 rounded-md text-sm font-bold uppercase tracking-widest transition-all duration-300 data-[state=active]:bg-gray-900 data-[state=active]:text-white dark:data-[state=active]:bg-[#c1cfc1] dark:data-[state=active]:text-[#090909] data-[state=active]:shadow-md dark:data-[state=active]:shadow-[0_0_20px_rgba(193,207,193,0.4)] data-[state=active]:scale-105 text-gray-500 dark:text-[#82717b] hover:text-gray-900 dark:hover:text-[#c1cfc1] data-[state=inactive]:hover:bg-gray-100 dark:data-[state=inactive]:hover:bg-[#3b353c]/50"
               >
                 2-Step Sim
               </TabsTrigger>
@@ -121,9 +128,7 @@ const UniquePlanSelector = () => {
               key={s}
               onClick={() => setSize(s)}
               className={`transition-all duration-500 ease-out flex flex-col items-center group ${
-                size === s
-                  ? "scale-125 mx-4"
-                  : "scale-100 hover:scale-110"
+                size === s ? "scale-125 mx-4" : "scale-100 hover:scale-110"
               }`}
             >
               <span
@@ -136,9 +141,9 @@ const UniquePlanSelector = () => {
                 ${s >= 1000 ? `${s / 1000}k` : s}
               </span>
               <div
-                className={`h-1 rounded-full transition-all duration-500 mt-2 ${
+                className={`h-1 rounded-md transition-all duration-500 mt-2 ${
                   size === s
-                    ? "w-full bg-amber-500 dark:bg-[#e7c965]"
+                    ? "w-full bg-amber-400 dark:bg-[#fbbf24]"
                     : "w-0 group-hover:w-1/2 bg-gray-400 dark:bg-[#82717b]"
                 }`}
               />
@@ -150,14 +155,14 @@ const UniquePlanSelector = () => {
           <p className="text-gray-500 dark:text-[#82717b] uppercase tracking-widest text-sm font-bold mb-6">
             Select Max Drawdown
           </p>
-          <div className="flex flex-wrap justify-center gap-4 bg-white dark:bg-[#090909] p-2 rounded-full border border-gray-200 dark:border-[#3b353c] shadow-sm transition-colors duration-300">
+          <div className="flex flex-wrap justify-center gap-4 bg-white dark:bg-[#090909] p-2 rounded-md border border-gray-200 dark:border-[#3b353c] shadow-sm transition-colors duration-300">
             {drawdowns.map((d) => (
               <button
                 key={d}
                 onClick={() => setMaxDrawdown(d)}
-                className={`px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wider transition-all duration-300 ${
+                className={`px-6 py-2 rounded-md text-sm font-bold uppercase tracking-wider transition-all duration-300 ${
                   maxDrawdown === d
-                    ? "bg-purple-600 dark:bg-[#8254ee] text-white shadow-md dark:shadow-[0_0_15px_rgba(130,84,238,0.4)] scale-105"
+                    ? "bg-purple-500 dark:bg-[#a855f7] text-white shadow-md dark:shadow-[0_0_15px_rgba(130,84,238,0.4)] scale-105"
                     : "text-gray-500 dark:text-[#82717b] hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#3b353c]/50"
                 }`}
               >
@@ -167,14 +172,14 @@ const UniquePlanSelector = () => {
           </div>
         </div>
 
-        <Card className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-0 mt-12 bg-white dark:bg-[#090909]/60 backdrop-blur-2xl border border-purple-600/20 dark:border-[#8254ee]/30 rounded-lg p-8 md:p-12 shadow-xl dark:shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden group transition-colors duration-300">
-          <div className="absolute inset-0 bg-linear-to-r from-purple-600/5 to-amber-500/5 dark:from-[#8254ee]/5 dark:to-[#e7c965]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+        <Card className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-0 mt-12 bg-white dark:bg-[#090909]/60 backdrop-blur-2xl border border-purple-500/20 dark:border-[#a855f7]/30 rounded-md p-8 md:p-12 shadow-xl dark:shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden group transition-colors duration-300">
+          <div className="absolute inset-0 bg-linear-to-r from-purple-500/5 to-amber-400/5 dark:from-[#a855f7]/5 dark:to-[#fbbf24]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
 
           <div className="md:border-r border-gray-200 dark:border-[#3b353c] px-6 text-center relative z-10 transition-transform hover:-translate-y-1">
             <p className="text-gray-500 dark:text-[#82717b] uppercase tracking-widest text-xs mb-3 font-semibold">
               Profit Target
             </p>
-            <p className="text-amber-500 dark:text-[#e7c965] font-black text-3xl md:text-4xl">
+            <p className="text-amber-400 dark:text-[#fbbf24] font-black text-3xl md:text-4xl">
               {specs.target}
             </p>
           </div>
@@ -182,7 +187,7 @@ const UniquePlanSelector = () => {
             <p className="text-gray-500 dark:text-[#82717b] uppercase tracking-widest text-xs mb-3 font-semibold">
               Max Daily Loss
             </p>
-            <p className="text-purple-600 dark:text-[#8254ee] font-black text-4xl">
+            <p className="text-purple-500 dark:text-[#a855f7] font-black text-4xl">
               {specs.daily}
             </p>
           </div>
@@ -190,7 +195,7 @@ const UniquePlanSelector = () => {
             <p className="text-gray-500 dark:text-[#82717b] uppercase tracking-widest text-xs mb-3 font-semibold">
               Max Overall Loss
             </p>
-            <p className="text-purple-600 dark:text-[#8254ee] font-black text-4xl">
+            <p className="text-purple-500 dark:text-[#a855f7] font-black text-4xl">
               {specs.overall}
             </p>
           </div>
@@ -207,9 +212,9 @@ const UniquePlanSelector = () => {
         <div className="mt-20 flex justify-center">
           <button
             onClick={handleCta}
-            className="group relative px-16 py-6 bg-gray-900 dark:bg-transparent overflow-hidden rounded-full ring-2 ring-gray-900 dark:ring-[#8254ee]/50 text-white hover:ring-amber-500 dark:hover:ring-[#e7c965] transition-all duration-500 shadow-xl dark:shadow-[0_0_40px_rgba(130,84,238,0.2)] dark:hover:shadow-[0_0_60px_rgba(231,201,101,0.3)] dark:hover:text-black"
+            className="group relative px-16 py-6 bg-gray-900 dark:bg-transparent overflow-hidden rounded-md ring-2 ring-gray-900 dark:ring-[#a855f7]/50 text-white hover:ring-amber-400 dark:hover:ring-[#fbbf24] transition-all duration-500 shadow-xl dark:shadow-[0_0_40px_rgba(130,84,238,0.2)] dark:hover:shadow-[0_0_60px_rgba(231,201,101,0.3)] dark:hover:text-black"
           >
-            <div className="absolute inset-0 w-0 bg-amber-500 dark:bg-gradient-to-r dark:from-[#a588e9] dark:to-[#b3a473] transition-all duration-300 ease-in-out group-hover:w-full rounded-r-full" />
+            <div className="absolute inset-0 w-0 bg-amber-400 dark:bg-gradient-to-r dark:from-[#a855f7] dark:to-[#fbbf24] transition-all duration-300 ease-in-out group-hover:w-full rounded-r-full" />
             <span className="relative font-black tracking-[0.2em] uppercase transition-colors duration-300 flex items-center gap-4">
               <span>Begin Practice</span>{" "}
               <span className="text-xl group-hover:translate-x-2 transition-transform">

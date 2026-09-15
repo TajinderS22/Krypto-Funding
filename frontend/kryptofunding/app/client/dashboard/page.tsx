@@ -1,242 +1,360 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
-  ArrowRight, Activity, Shield,
-  XCircle, AlertTriangle, ChevronDown, ChevronUp, LayoutGrid
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  Loader2,
+  Shield,
+  XCircle,
 } from "lucide-react";
 import api from "@/lib/axios";
 import AuthPromptModal from "@/components/app/AuthPromptModal";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import type { MyChallenge } from "@/lib/types";
 
+type ChallengeGroups = {
+  active: MyChallenge[];
+  failed: MyChallenge[];
+  passed: MyChallenge[];
+};
+
+const money = (value: number | null | undefined) =>
+  value === null || value === undefined
+    ? "—"
+    : new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(value);
+
 export default function DashboardPage() {
-  const router = useRouter();
-  const [myChallenges, setMyChallenges] = useState<{
-    active: MyChallenge[];
-    failed: MyChallenge[];
-    passed: MyChallenge[];
-  }>({ active: [], failed: [], passed: [] });
+  const [myChallenges, setMyChallenges] = useState<ChallengeGroups>({
+    active: [],
+    failed: [],
+    passed: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
       try {
-        const myRes = await api.get("/user/challenges/my-challenges").catch((err: any) => {
-          if (err?.response?.status === 404) {
-            return { data: { active: [], failed: [], passed: [] } };
-          }
-          if (err?.response?.status === 401) throw err;
-          return { data: { active: [], failed: [], passed: [] } };
-        });
-        setMyChallenges(myRes.data);
-      } catch (error: any) {
-        if (error?.response?.status === 401) {
-          setShowAuthModal(true);
-          return;
-        }
-        console.error("Error fetching dashboard data", error);
+        const response = await api.get("/user/challenges/my-challenges");
+        setMyChallenges(response.data as ChallengeGroups);
+      } catch (requestError: unknown) {
+        const axiosError = requestError as { response?: { status?: number } };
+        if (axiosError.response?.status === 401) setShowAuthModal(true);
+        else if (axiosError.response?.status !== 404)
+          console.error("Could not load dashboard", requestError);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
+    load();
   }, []);
 
-  const activeList = myChallenges.active;
-  const failedList = myChallenges.failed;
-  const totalActive = activeList.length;
-  const totalFailed = failedList.length;
+  console.log(myChallenges)
 
-  if (isLoading) {
+  const active = myChallenges.active || [];
+  const completed = myChallenges.passed || [];
+  const failed = myChallenges.failed || [];
+
+
+  if (isLoading)
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="relative flex items-center justify-center">
-          <div className="absolute inset-0 border-t-2 border-amber-500 rounded-full animate-spin h-16 w-16"></div>
-          <Activity className="h-6 w-6 text-amber-500 animate-pulse" />
-        </div>
+      <div className="grid min-h-[70vh] place-items-center">
+        <Loader2 className="size-6 animate-spin text-amber-400 dark:text-[#fbbf24]" />
       </div>
     );
-  }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] dark:bg-[#050304] text-gray-900 dark:text-white pb-24 font-sans selection:bg-purple-600/30">
-
-      <div className="relative overflow-hidden bg-white dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-white/5 pt-12 pb-16 px-6 lg:px-12">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-purple-600/10 dark:bg-purple-600/20 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-amber-500/10 dark:bg-amber-500/10 rounded-full blur-[100px] translate-y-1/3 -translate-x-1/4 pointer-events-none"></div>
-
-        <div className="max-w-7xl mx-auto relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 text-purple-700 dark:text-purple-400 text-xs font-bold tracking-widest uppercase mb-4">
-              <Activity className="w-3 h-3" /> Dashboard Overview
+    <main className="min-h-screen bg-white pb-14 dark:bg-[#090909]">
+      <div className="border-b border-gray-300 bg-gradient-to-br from-purple-50 via-white to-amber-50 dark:border-[#3b353c] dark:from-[#a855f7]/10 dark:via-[#090909] dark:to-[#fbbf24]/10">
+        <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:py-14">
+          <div className="flex flex-col justify-between gap-7 md:flex-row md:items-end">
+            <div>
+              <Badge className="mb-4 bg-purple-500 text-white hover:bg-purple-500 dark:bg-[#a855f7]">
+                <Activity />
+                Challenge workspace
+              </Badge>
+              <h1 className="text-3xl font-black uppercase tracking-tighter sm:text-4xl">
+                Your trading dashboard
+              </h1>
+              <p className="mt-3 max-w-xl text-gray-500 dark:text-[#82717b]">
+                Keep an eye on your active evaluations and move through each
+                stage with confidence.
+              </p>
             </div>
-            <h1 className="text-5xl md:text-6xl font-black tracking-tighter uppercase text-gray-900 dark:text-white">
-              Simulator <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 dark:from-[#8254ee] dark:to-[#e7c965]">HQ</span>
-            </h1>
-            <p className="text-gray-500 dark:text-[#82717b] text-lg max-w-xl font-light">
-              Welcome back, trader. Your performance metrics and next opportunities await.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col items-end">
-              <span className="text-xs uppercase tracking-widest font-bold text-gray-400">Active</span>
-              <span className="text-3xl font-black">{totalActive}</span>
-            </div>
-            <button
-              onClick={() => router.push("/challenges")}
-              className="px-6 py-3 bg-purple-600 text-white font-bold uppercase tracking-widest rounded-full hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm"
+            <Button
+              asChild
+              className="h-auto rounded-md bg-amber-400 px-6 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-gray-900 dark:bg-[#fbbf24] dark:text-[#090909] dark:hover:bg-[#c1cfc1]"
             >
-              <LayoutGrid className="w-4 h-4" /> Browse Challenges
-            </button>
+              <Link href="/challenges">
+                <LayoutGrid />
+                Explore challenges
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 lg:px-12 -mt-8 relative z-20 space-y-24">
+      <div className="mx-auto max-w-7xl space-y-9 px-5 py-8 sm:px-8">
+        <section className="grid gap-4 sm:grid-cols-3">
+          <Card className="rounded-md border-purple-200 bg-purple-50/60 py-0 shadow-none dark:border-[#a855f7]/20 dark:bg-[#a855f7]/10">
+            <CardContent className="p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-[#a855f7]">
+                Active challenges
+              </p>
+              <p className="mt-2 text-3xl font-black text-purple-950 dark:text-[#c1cfc1]">
+                {active.length}
+              </p>
+              <p className="mt-1 text-xs text-purple-600/70 dark:text-[#82717b]">
+                Evaluations in progress
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-md border-amber-200 bg-amber-50/60 py-0 shadow-none dark:border-[#fbbf24]/20 dark:bg-[#fbbf24]/10">
+            <CardContent className="p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-[#fbbf24]">
+                Completed
+              </p>
+              <p className="mt-2 text-3xl font-black text-amber-950 dark:text-[#c1cfc1]">
+                {completed.length}
+              </p>
+              <p className="mt-1 text-xs text-amber-700/70 dark:text-[#82717b]">
+                Successful evaluations
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-md border-gray-300 bg-gray-50 py-0 shadow-none dark:border-[#3b353c] dark:bg-[#0c0c0c]">
+            <CardContent className="p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-700 dark:text-[#82717b]">
+                Past challenges
+              </p>
+              <p className="mt-2 text-3xl font-black text-gray-950 dark:text-[#c1cfc1]">
+                {failed.length}
+              </p>
+              <p className="mt-1 text-xs text-gray-700/70 dark:text-[#82717b]">
+                Available to review
+              </p>
+            </CardContent>
+          </Card>
+        </section>
 
         <section>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold uppercase tracking-widest flex items-center gap-3">
-              <Activity className="w-6 h-6 text-amber-500" /> Active Terminals
-            </h2>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tighter">
+                Active challenges
+              </h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-[#82717b]">
+                Continue where you left off.
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className="border-amber-300 bg-amber-50 text-amber-700 dark:border-[#fbbf24]/30 dark:bg-[#fbbf24]/10 dark:text-[#fbbf24]"
+            >
+              {active.length} active
+            </Badge>
           </div>
+          {active.length ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {active.map((item) => {
+                const challenge = item.challenge;
+                const currentStep = item.status?.currentStepStatus ?? 1;
+                const steps = item.status?.steps ?? challenge.steps ?? 1;
+                const target = (item.challenge.target! * item.challenge.value)/100;
+                const currentBalance = item.status!.currentBalance + 30
+                const achivedTarget = target - (currentBalance - item.challenge.value);
 
-          {totalActive > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {activeList.map((mc) => {
-                const ch = mc.challenge;
-                const st = mc.status;
-                const currentStep = st?.currentStepStatus ?? 1;
-                const totalSteps = st?.steps ?? ch.steps ?? 1;
-                const stepProgress = Math.min(100, (currentStep / totalSteps) * 100);
+
+                const progress = ((target - achivedTarget) / target)*100;
+
 
                 return (
-                  <Link
-                    key={mc.purchase_id}
-                    href={`/client/dashboard/challenge/${ch.id}`}
-                    className="group relative bg-white dark:bg-[#0c0c0c] border border-gray-200 dark:border-white/5 rounded-lg p-6 lg:p-8 hover:border-purple-500/50 dark:hover:border-[#8254ee]/50 transition-all duration-500 overflow-hidden shadow-sm hover:shadow-xl dark:hover:shadow-[0_0_40px_rgba(130,84,238,0.1)]"
+                  <Card
+                    key={item.purchase_id}
+                    className="group bg-white dark:bg-[#0c0a16] rounded-md border-gray-300 overflow-hidden py-0 shadow-sm transition-shadow hover:shadow-md dark:border-[#3b353c]"
                   >
-                    <div className="absolute right-0 top-0 w-64 h-64 bg-gradient-to-br from-purple-500/5 to-amber-500/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700"></div>
-
-                    <div className="relative z-10 flex flex-col h-full justify-between gap-6">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-2 py-1 rounded-md bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400 mb-4">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div> Active
+                    <CardContent className="p-0">
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Badge className="bg-amber-400 text-white hover:bg-amber-400 dark:bg-[#fbbf24] dark:text-[#090909]">
+                              <span className="size-1.5 rounded-md bg-white dark:bg-[#090909]" />
+                              Active
+                            </Badge>
+                            <h3 className="mt-4 text-xl font-black uppercase tracking-tighter">
+                              {challenge.title}
+                            </h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-[#82717b]">
+                              {money(challenge.value)} account
+                            </p>
                           </div>
-                          <h3 className="text-2xl font-black tracking-tight">{ch.title}</h3>
-                          <p className="text-sm text-gray-500 dark:text-[#82717b] font-mono mt-1">
-                            ${ch.value?.toLocaleString() ?? "-"} account
-                          </p>
+                          <Button
+                            asChild
+                            size="icon"
+                            variant="outline"
+                            className="rounded-md border-gray-300 text-purple-500  group-hover:text-white dark:border-[#3b353c] dark:hover:text-white dark:text-[#a855f7] dark:group-hover:text-black dark:group-hover:bg-[#a855f7]"
+                          >
+                            <Link
+                              href={`/client/dashboard/challenge/${challenge.id}?purchase=${item.purchase_id}`}
+                              aria-label={`Open ${challenge.title}`}
+                            >
+                              <ArrowRight />
+                            </Link>
+                          </Button>
                         </div>
-                        <div className="h-12 w-12 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
-                          <ArrowRight className="w-5 h-5" />
+                        <div className="mt-6 grid grid-cols-3 gap-3 border-y border-gray-300 py-4 text-sm dark:border-[#3b353c]">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-[#82717b]">
+                              Stage
+                            </p>
+                            <p className="mt-1 font-bold">
+                              {currentStep} of {steps}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-[#82717b]">
+                              Target
+                            </p>
+                            <p className="mt-1 font-bold text-amber-400 dark:text-[#fbbf24]">
+                              {challenge.target ?? "—"}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-[#82717b]">
+                              Drawdown
+                            </p>
+                            <p className="mt-1 font-bold text-purple-500 dark:text-[#a855f7]">
+                              {challenge.drawdown ?? "—"}%
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4">
+                          <div className="mb-2 flex justify-between text-xs">
+                            <span className="text-gray-500 dark:text-[#82717b]">
+                              Stage progress
+                            </span>
+                            <span className="font-bold text-purple-500 dark:text-[#a855f7]">
+                              {item.status?.value ? Math.round(progress )+"%": "Please Add API Key" }
+                            </span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-md flex bg-gray-200 dark:bg-[#3b353c]">
+                            {progress <0 ? <div
+                              className="h-full  rounded-md bg-red-400 "
+                              style={{ width: `${(-progress)}%` }}
+                            />
+                              :
+                              <div
+                              className="h-full  rounded-md bg-green-400 "
+                              style={{ width: `${(progress)}%` }}
+                            />
+                            }
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-gray-500 dark:text-[#82717b] font-bold uppercase tracking-widest text-xs">
-                          Step {currentStep} of {totalSteps}
-                        </span>
-                        <span className="text-xs text-gray-400">|</span>
-                        <span className="text-gray-500 dark:text-[#82717b] font-bold uppercase tracking-widest text-xs">
-                          DD: {ch.drawdown ?? "-"}% | Target: {ch.target ?? "-"}%
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-gray-500">
-                          <span>Step Progress</span>
-                          <span>{currentStep}/{totalSteps}</span>
-                        </div>
-                        <div className="h-2 w-full bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-purple-500 to-amber-500 rounded-full transition-all duration-1000"
-                            style={{ width: `${Math.max(2, stepProgress)}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
           ) : (
-            <div className="w-full bg-white dark:bg-[#0c0c0c] border border-dashed border-gray-300 dark:border-white/10 rounded-lg p-12 text-center flex flex-col items-center justify-center">
-              <div className="w-20 h-20 bg-gray-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-6">
-                <Shield className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-black mb-2">No Active Terminals</h3>
-              <p className="text-gray-500 max-w-md mb-8">You haven't started any evaluations yet. Browse challenges to find the right plan and begin your trading journey.</p>
-              <button onClick={() => router.push("/challenges")} className="px-8 py-3 bg-purple-600 text-white font-bold uppercase tracking-widest rounded-full hover:bg-purple-700 transition-colors">
-                Browse Challenges
-              </button>
-            </div>
+            <Card className="rounded-md border-dashed border-gray-300 py-0 dark:border-[#3b353c]">
+              <CardContent className="grid min-h-64 place-items-center p-6 text-center">
+                <div>
+                  <span className="mx-auto grid size-12 place-items-center rounded-full bg-purple-100 text-purple-500 dark:bg-[#a855f7]/15 dark:text-[#a855f7]">
+                    <Shield className="size-5" />
+                  </span>
+                  <h3 className="mt-4 font-black uppercase tracking-tighter">
+                    No active challenge yet
+                  </h3>
+                  <p className="mt-1 max-w-sm text-sm text-gray-500 dark:text-[#82717b]">
+                    Choose an evaluation that fits your trading style to get
+                    started.
+                  </p>
+                  <Button
+                    asChild
+                    className="mt-5 rounded-md bg-amber-400 text-sm font-black uppercase tracking-widest text-white hover:bg-gray-900 dark:bg-[#fbbf24] dark:text-[#090909] dark:hover:bg-[#c1cfc1]"
+                  >
+                    <Link href="/challenges">Browse challenges</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </section>
 
-        {totalFailed > 0 && (
+        {failed.length > 0 && (
           <section>
             <button
-              onClick={() => setShowFailed(!showFailed)}
-              className="flex items-center justify-between w-full mb-6 group"
+              onClick={() => setShowFailed((open) => !open)}
+              className="flex w-full items-center justify-between rounded-md border border-gray-300 bg-white p-4 text-left transition-colors hover:bg-gray-50 dark:border-[#3b353c] dark:bg-[#090909] dark:hover:bg-[#0c0c0c]"
             >
-              <h2 className="text-2xl font-bold uppercase tracking-widest flex items-center gap-3">
-                <XCircle className="w-6 h-6 text-red-500" /> Past Challenges
-                <span className="text-sm font-mono font-bold text-gray-400">({totalFailed})</span>
-              </h2>
-              <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center group-hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-                {showFailed ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 place-items-center rounded-full bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400">
+                  <XCircle className="size-4" />
+                </span>
+                <div>
+                  <h2 className="font-black uppercase tracking-tighter">
+                    Past challenges
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-[#82717b]">
+                    {failed.length} evaluation{failed.length === 1 ? "" : "s"}{" "}
+                    to review
+                  </p>
+                </div>
               </div>
+              {showFailed ? (
+                <ChevronUp className="text-gray-500 dark:text-[#82717b]" />
+              ) : (
+                <ChevronDown className="text-gray-500 dark:text-[#82717b]" />
+              )}
             </button>
-
             {showFailed && (
-              <div className="space-y-4">
-                {failedList.map((mc) => {
-                  const ch = mc.challenge;
-                  return (
-                    <div
-                      key={mc.purchase_id}
-                      className="relative bg-white dark:bg-[#0c0c0c] border border-red-200 dark:border-red-500/10 rounded-lg p-6 lg:p-8 overflow-hidden"
-                    >
-                      <div className="absolute right-0 top-0 w-48 h-48 bg-red-500/5 rounded-full blur-3xl"></div>
-
-                      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center">
-                            <AlertTriangle className="w-5 h-5 text-red-500" />
-                          </div>
-                          <div>
-                            <h3 className="text-xl font-black tracking-tight">{ch.title}</h3>
-                            <p className="text-xs text-gray-500 dark:text-[#82717b] font-bold uppercase tracking-widest mt-1">
-                              ${ch.value?.toLocaleString() ?? "-"} account &middot; DD: {ch.drawdown ?? "-"}% &middot; Target: {ch.target ?? "-"}%
-                            </p>
-                          </div>
-                        </div>
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-widest">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                          Failed
+              <div className="mt-3 space-y-3">
+                {failed.map((item) => (
+                  <Card
+                    key={item.purchase_id}
+                    className="rounded-md border-red-200 py-0 shadow-none dark:border-red-500/20"
+                  >
+                    <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="size-4 text-red-600 dark:text-red-400" />
+                        <div>
+                          <p className="font-bold uppercase tracking-widest">
+                            {item.challenge.title}
+                          </p>
+                          <p className="mt-1 text-sm text-gray-500 dark:text-[#82717b]">
+                            {money(item.challenge.value)} · Target{" "}
+                            {item.challenge.target ?? "—"}% · Drawdown{" "}
+                            {item.challenge.drawdown ?? "—"}%
+                          </p>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                      <Badge variant="destructive">Ended</Badge>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
           </section>
         )}
-
       </div>
-
       <AuthPromptModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
       />
-    </div>
+    </main>
   );
 }

@@ -1,9 +1,11 @@
-
-
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import db from "../../service/Drizzle/index.js";
-import { usersTable, adminsTable, challanges } from "../../service/Drizzle/db/schema.js";
+import {
+  usersTable,
+  adminsTable,
+  challenges,
+} from "../../service/Drizzle/db/schema.js";
 import { eq } from "drizzle-orm";
 import { sendWelocmeEmail } from "../../service/email/email.js";
 import sendOtpService from "../../service/OTP/sendOtpService.js";
@@ -18,8 +20,7 @@ dotenv.config({
   path: "../../.env",
 });
 
-const adminRouter= Router();
-
+const adminRouter = Router();
 
 const salRounds = 10;
 
@@ -54,8 +55,14 @@ adminRouter.post("/auth/signup", async (req, res) => {
       });
       return;
     }
-    validatedUser.password = await bcrypt.hash(validatedUser.password, salRounds);
-    const savedUser = await db.insert(adminsTable).values(validatedUser).returning();
+    validatedUser.password = await bcrypt.hash(
+      validatedUser.password,
+      salRounds,
+    );
+    const savedUser = await db
+      .insert(adminsTable)
+      .values(validatedUser)
+      .returning();
 
     await sendWelocmeEmail(validatedUser);
 
@@ -135,7 +142,9 @@ adminRouter.post("/auth/verify-otp", async (req, res) => {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
-  await redis.set(`admin_session:${email}`, refreshToken, { ex: 7 * 24 * 3600 });
+  await redis.set(`admin_session:${email}`, refreshToken, {
+    ex: 7 * 24 * 3600,
+  });
 
   res.status(200).json({
     message: "Authenticated",
@@ -183,7 +192,9 @@ adminRouter.post("/auth/refresh", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    await redis.set(`admin_session:${payload.user.email}`, newRefreshToken, { ex: 7 * 24 * 3600 });
+    await redis.set(`admin_session:${payload.user.email}`, newRefreshToken, {
+      ex: 7 * 24 * 3600,
+    });
 
     res.json({ message: "Refreshed" });
   } catch {
@@ -199,7 +210,6 @@ adminRouter.post("/auth/logout", async (req, res) => {
       const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET!) as any;
       await redis.del(`admin_session:${payload.user.email}`);
     } catch {}
-
   }
 
   const isProduction = process.env.NODE_ENV === "production";
@@ -237,7 +247,7 @@ adminRouter.post("/auth/send-otp", async (req, res) => {
   }
 
   try {
-    await sendOtpService(email, 'admin');
+    await sendOtpService(email, "admin");
     res.status(200).json({
       message: "OTP sent to your E-Mail",
     });
@@ -274,7 +284,7 @@ adminRouter.post("/auth/signin", async (req, res) => {
   }
 
   try {
-    await sendOtpService(email, 'admin');
+    await sendOtpService(email, "admin");
 
     return res.status(200).json({
       message: "OTP sent to Registered E-Mail",
@@ -286,50 +296,45 @@ adminRouter.post("/auth/signin", async (req, res) => {
   }
 });
 
+adminRouter.post("/create/challenge", adminMiddleware, async (req, res) => {
+  const data = req.body;
 
+  const { title, description, price, value, steps, drawdown, target } = data;
 
+  if (!title || !description || !price) {
+    return res.status(400).json({
+      message: "All fields are required",
+    });
+  }
 
-adminRouter.post("/create/challenge",adminMiddleware,async(req,res)=>{
-    const data = req.body;
+  const creator_id = (req as any).user_id.user.id;
 
+  try {
+    const challenge = await db
+      .insert(challenges)
+      .values({
+        title,
+        description,
+        price,
+        creator_id,
+        value,
+        steps: steps ?? 1,
+        drawdown: drawdown ?? 10,
+        target: target ?? 10,
+      })
+      .returning();
 
-    const {title ,description ,price, value, steps, drawdown, target }= data;
-    
-    if(!title || !description || !price){
-        return res.status(400).json({
-            message:"All fields are required"
-        });
-    }
-
-    const creator_id = (req as any).user_id.user.id;
-
-
-    try {
-        const challenge = await db.insert(challanges).values({
-            title,
-            description,
-            price,
-            creator_id,
-            value,
-            steps: steps ?? 1,
-            drawdown: drawdown ?? 10,
-            target: target ?? 10
-        }).returning();
-
-
-        res.status(200).json({
-            message:"Challenge created successfully."
-        })
-
-    }catch(e){
-        console.error(e)
-    }
-
-})
+    res.status(200).json({
+      message: "Challenge created successfully.",
+    });
+  } catch (e) {
+    console.error(e);
+  }
+});
 
 adminRouter.get("/challenges", async (_req, res) => {
   try {
-    const allChallenges = await db.select().from(challanges);
+    const allChallenges = await db.select().from(challenges);
     res.status(200).json(allChallenges);
   } catch (error) {
     console.error(error);
@@ -342,8 +347,8 @@ adminRouter.get("/challenge/:id", async (req, res) => {
     const id = req.params.id as string;
     const [challenge] = await db
       .select()
-      .from(challanges)
-      .where(eq(challanges.id, id));
+      .from(challenges)
+      .where(eq(challenges.id, id));
 
     if (!challenge) {
       return res.status(404).json({ message: "Challenge not found" });
@@ -362,16 +367,26 @@ adminRouter.put("/challenge/:id", adminMiddleware, async (req, res) => {
     const { title, description, price, steps, drawdown, target } = req.body;
 
     const [updated] = await db
-      .update(challanges)
-      .set({ title, description, price, steps, drawdown, target, updated_at: new Date() })
-      .where(eq(challanges.id, id))
-      .returning(); 
+      .update(challenges)
+      .set({
+        title,
+        description,
+        price,
+        steps,
+        drawdown,
+        target,
+        updated_at: new Date(),
+      })
+      .where(eq(challenges.id, id))
+      .returning();
 
     if (!updated) {
       return res.status(404).json({ message: "Challenge not found" });
     }
 
-    res.status(200).json({ message: "Challenge updated successfully", challenge: updated });
+    res
+      .status(200)
+      .json({ message: "Challenge updated successfully", challenge: updated });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to update challenge" });
@@ -383,8 +398,8 @@ adminRouter.delete("/challenge/:id", adminMiddleware, async (req, res) => {
     const id = req.params.id as string;
 
     const [deleted] = await db
-      .delete(challanges)
-      .where(eq(challanges.id, id))
+      .delete(challenges)
+      .where(eq(challenges.id, id))
       .returning();
 
     if (!deleted) {

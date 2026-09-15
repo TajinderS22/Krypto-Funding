@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import db from "../../service/Drizzle/index.js";
 import {
-  challanges,
+  challenges,
   usersTable,
   challengeStatus,
   purchases,
@@ -20,11 +20,12 @@ import { UserSchema } from "../../validation/userSchema.js";
 import { encrypt } from "../../service/encryption/encrypt.js";
 import { decrypt } from "../../service/encryption/decrypt.js";
 import { createLanguageService } from "typescript";
+import createClient from "../../service/bybit/createClient.js";
+import clients from "../../Utils/clients.js";
 
 dotenv.config({
   path: "../../.env",
 });
-
 
 const userRouter = Router();
 
@@ -272,7 +273,7 @@ userRouter.post("/auth/signin", async (req, res) => {
 });
 
 userRouter.get("/challenges", async (req, res) => {
-  const result = await db.select().from(challanges);
+  const result = await db.select().from(challenges);
 
   res.status(200).json({
     challenges: result,
@@ -295,22 +296,24 @@ userRouter.get(
             status: challengeStatus.status,
             passed: challengeStatus.passed,
             currentStepStatus: challengeStatus.currentStepStatus,
+            value: challengeStatus.value,
+            currentBalance: challengeStatus.current_balance,
             steps: challengeStatus.steps,
-            hasApiKey: sql<boolean>`false`,
+            hasApiKey: challengeStatus.has_api_key,
             updated_at: challengeStatus.updated_at,
           },
           challenge: {
-            id: challanges.id,
-            creator_id: challanges.creator_id,
-            title: challanges.title,
-            description: challanges.description,
-            value: challanges.value,
-            price: challanges.price,
-            steps: challanges.steps,
-            drawdown: challanges.drawdown,
-            target: challanges.target,
-            created_at: challanges.created_at,
-            updated_at: challanges.updated_at,
+            id: challenges.id,
+            creator_id: challenges.creator_id,
+            title: challenges.title,
+            description: challenges.description,
+            value: challenges.value,
+            price: challenges.price,
+            steps: challenges.steps,
+            drawdown: challenges.drawdown,
+            target: challenges.target,
+            created_at: challenges.created_at,
+            updated_at: challenges.updated_at,
           },
         })
         .from(purchases)
@@ -319,9 +322,10 @@ userRouter.get(
           and(
             eq(challengeStatus.user_id, purchases.user_id),
             eq(challengeStatus.challenge_id, purchases.challenge_id),
+            eq(challengeStatus.purchase_id, purchases.id),
           ),
         )
-        .innerJoin(challanges, eq(challanges.id, purchases.challenge_id))
+        .innerJoin(challenges, eq(challenges.id, purchases.challenge_id))
         .where(eq(purchases.user_id, userId))) as {
         purchase_id: number;
         purchase_date: Date | null;
@@ -353,6 +357,8 @@ userRouter.get(
       const failed = myChallenges.filter((mc) => mc.status.status === "failed");
       const passed = myChallenges.filter((mc) => mc.status.status === "passed");
 
+      console.log(myChallenges.length);
+
       res.status(200).json({ active, failed, passed });
     } catch (error) {
       console.error("Error fetching my challenges:", error);
@@ -366,16 +372,14 @@ userRouter.post("/challenges/buy", userMiddleware, async (req, res) => {
     const { challengeId } = req.body;
     const userId = (req as any).user_id.user.id;
 
-
-
     if (!challengeId) {
       return res.status(400).json({ message: "challengeId is required" });
     }
 
     const [challenge] = await db
       .select()
-      .from(challanges)
-      .where(eq(challanges.id, challengeId));
+      .from(challenges)
+      .where(eq(challenges.id, challengeId));
 
     if (!challenge) {
       return res.status(404).json({ message: "Challenge not found" });
@@ -398,6 +402,7 @@ userRouter.post("/challenges/buy", userMiddleware, async (req, res) => {
         passed: false,
         currentStepStatus: 1,
         steps: challenge.steps ?? 1,
+        purchase_id: purchase!.id,
       })
       .returning();
 
@@ -417,50 +422,106 @@ userRouter.post("/api-key", userMiddleware, async (req, res) => {
 
   const { apiKey, apiSecret, purchaseId, challengeId } = req.body;
 
-
-  
-
   const apiCredentials = JSON.stringify({
     apiKey,
     apiSecret,
   });
 
-    console.log(apiCredentials,purchaseId,challengeId)
-
-
-    if(!apiKey||!apiSecret||!purchaseId||!challengeId){
+  if (!apiKey || !apiSecret || !purchaseId || !challengeId) {
     res.status(422).json({
-      message:"Please send all fields correctly"
-    })
+      message: "Please send all fields correctly",
+    });
     return;
   }
 
   try {
     const encryptedApiCredentials = encrypt(apiCredentials);
 
-    const updated = await db.insert(apiKeys).values({
-      user_id: userId,
-      challenge_id: challengeId,
-      pruchase_id: purchaseId,
-      encrypted_api_key_credentials: encryptedApiCredentials.encrypted,
-      iv: encryptedApiCredentials.iv,
-      auth_tag: encryptedApiCredentials.authTag,
-    })
-    .returning();
+    const isKeyPresent = await db
+      .select()
+      .from(apiKeys)
+      .where(
+        and(eq(apiKeys.pruchase_id, purchaseId), eq(apiKeys.user_id, userId)),
+      );
 
-    if(!updated){
-      res.status(400).json({
-        message:"Please check all required fields"
-      })
+    if (isKeyPresent.length > 0) {
+      res.status(200).json({
+        message: "Key already added for this purchase.",
+      });
       return;
     }
 
-    console.log(updated)
+    const addedKey = await db
+      .insert(apiKeys)
+      .values({
+        user_id: userId,
+        challenge_id: challengeId,
+        pruchase_id: purchaseId,
+        encrypted_api_key_credentials: encryptedApiCredentials.encrypted,
+        iv: encryptedApiCredentials.iv,
+        auth_tag: encryptedApiCredentials.authTag,
+      })
+      .returning();
+
+    const currChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId));
+
+    if (!addedKey) {
+      res.status(400).json({
+        message: "Please check all required fields",
+      });
+      return;
+    }
+
+    let client = clients.get(userId + purchaseId);
+
+    if (!client) {
+      client = createClient(apiKey, apiSecret);
+      clients.set(userId + purchaseId, client);
+    }
+
+    const challengeValue = currChallenge[0]?.value;
+
+    if (challengeValue == null) {
+      res.status(400).json({
+        message: "Challenge value not found",
+      });
+      return;
+    }
+    const updatedStatus = await db
+      .update(challengeStatus)
+      .set({
+        has_api_key: true,
+        value: challengeValue,
+        current_balance: challengeValue,
+      })
+      .where(
+        and(
+          eq(challengeStatus.user_id, userId),
+          eq(challengeStatus.challenge_id, challengeId),
+          eq(challengeStatus.purchase_id, purchaseId),
+        ),
+      )
+      .returning();
+
+
+    const params = {
+      adjustType: 0 as const,
+      utaDemoApplyMoney: [
+        {
+          coin: "USDT",
+          amountStr: challengeValue.toString(),
+        },
+      ],
+    };
+
+    await client.requestDemoTradingFunds(params);
 
     res.status(200).json({
-      message:" saved your credentials successfully "
-    })
-
+      message: " saved your credentials successfully ",
+    });
   } catch (error) {
     console.error(error);
   }

@@ -1,23 +1,31 @@
 "use client";
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Navbar from "@/components/structural/Navbar";
 import Footer from "@/components/structural/Footer";
 import Link from "next/link";
 import api from "@/lib/axios";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function SignUp() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     firstname: "",
     lastname: "",
     email: "",
     password: "",
+    username: "",
   });
+
   const [errors, setErrors] = useState<{
     firstname?: string;
     lastname?: string;
     email?: string;
     password?: string;
+    username?: string;
   }>({});
 
   const validate = () => {
@@ -53,19 +61,29 @@ export default function SignUp() {
       });
       if (result.status === 200 || result.status === 201) {
         toast.success("Account created successfully!");
+        router.push("/auth/signin");
       } else {
         toast.error("Failed to create account. Please try again.");
       }
-    } catch (err: any) {
-      toast.error(
-        err.response?.data?.message || "An error occurred during signup.",
-      );
+    } catch (err: unknown) {
+      let message = "An error occurred during signup.";
+
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === "object" && err !== null && "response" in err) {
+        const axiosError = err as {
+          response?: { data?: { message?: string } };
+        };
+        message = axiosError.response?.data?.message || message;
+      }
+
+      toast.error(message);
       console.error(err);
     }
   };
 
   return (
-    <div className="bg-white dark:bg-[#090909] font-sans text-gray-900 dark:text-[#c1cfc1] min-h-screen flex flex-col selection:bg-amber-500 dark:selection:bg-[#e7c965] selection:text-white dark:selection:text-[#090909] transition-colors duration-300">
+    <div className="bg-white dark:bg-[#090909] font-sans text-gray-900 dark:text-[#c1cfc1] min-h-screen flex flex-col selection:bg-amber-400 dark:selection:bg-[#fbbf24] selection:text-white dark:selection:text-[#090909] transition-colors duration-300">
       <Navbar />
       <div className="flex-1 flex items-center justify-center p-6 my-12">
         <div className="w-full max-w-7xl flex flex-col lg:flex-row-reverse border border-gray-300 dark:border-[#3b353c] bg-white dark:bg-[#050304]">
@@ -75,7 +93,7 @@ export default function SignUp() {
               <br />
               Training
             </h2>
-            <p className="text-gray-600 dark:text-[#82717b] text-xl font-light relative z-10 border-r-4 border-purple-600 dark:border-[#8254ee] pr-6 text-right leading-relaxed">
+            <p className="text-gray-600 dark:text-[#82717b] text-xl font-light relative z-10 border-r-4 border-purple-500 dark:border-[#a855f7] pr-6 text-right leading-relaxed">
               Create an account to access our risk-free simulator platform and
               hone your trading edge.
             </p>
@@ -91,17 +109,17 @@ export default function SignUp() {
 
             <form className="space-y-10" onSubmit={handleSubmit}>
               <div className="flex flex-col sm:flex-row gap-8">
-                <div className="flex flex-col border-b border-gray-300 dark:border-[#3b353c] pb-2 flex-1">
-                  <label className="block text-xs font-black text-amber-500 dark:text-[#e7c965]  tracking-widest mb-2">
+                <div className="flex flex-col flex-1">
+                  <Label className="text-xs font-black text-amber-400 dark:text-[#fbbf24] tracking-widest mb-2">
                     First Name
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="text"
                     value={formData.firstname}
                     onChange={(e) =>
                       setFormData({ ...formData, firstname: e.target.value })
                     }
-                    className="w-full bg-transparent text-xl text-gray-900 dark:text-white focus:outline-none placeholder-gray-400 dark:placeholder-[#3b353c] font-black tracking-tighter "
+                    className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter text-gray-900 dark:text-white focus-visible:border-amber-400 focus-visible:ring-0 placeholder:text-gray-400 dark:border-[#3b353c] dark:placeholder:text-[#3b353c] dark:focus-visible:border-[#fbbf24]"
                     placeholder="JOHN"
                   />
                   {errors.firstname && (
@@ -110,17 +128,17 @@ export default function SignUp() {
                     </p>
                   )}
                 </div>
-                <div className="flex flex-col border-b border-gray-300 dark:border-[#3b353c] pb-2 flex-1">
-                  <label className="block text-xs font-black text-amber-500 dark:text-[#e7c965]  tracking-widest mb-2">
+                <div className="flex flex-col flex-1">
+                  <Label className="text-xs font-black text-amber-400 dark:text-[#fbbf24] tracking-widest mb-2">
                     Last Name
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="text"
                     value={formData.lastname}
                     onChange={(e) =>
                       setFormData({ ...formData, lastname: e.target.value })
                     }
-                    className="w-full bg-transparent text-xl text-gray-900 dark:text-white focus:outline-none placeholder-gray-400 dark:placeholder-[#3b353c] font-black tracking-tighter "
+                    className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter text-gray-900 dark:text-white focus-visible:border-amber-400 focus-visible:ring-0 placeholder:text-gray-400 dark:border-[#3b353c] dark:placeholder:text-[#3b353c] dark:focus-visible:border-[#fbbf24]"
                     placeholder="DOE"
                   />
                   {errors.lastname && (
@@ -131,17 +149,37 @@ export default function SignUp() {
                 </div>
               </div>
 
-              <div className="flex flex-col border-b border-gray-300 dark:border-[#3b353c] pb-2">
-                <label className="block text-xs font-black text-amber-500 dark:text-[#e7c965] uppercase tracking-widest mb-2">
+              <div className="flex flex-col">
+                <Label className="text-xs font-black text-amber-400 dark:text-[#fbbf24] uppercase tracking-widest mb-2">
+                  Username
+                </Label>
+                <Input
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) =>
+                    setFormData({ ...formData, username: e.target.value })
+                  }
+                  className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter text-gray-900 dark:text-white focus-visible:border-amber-400 focus-visible:ring-0 placeholder:text-gray-400 dark:border-[#3b353c] dark:placeholder:text-[#3b353c] dark:focus-visible:border-[#fbbf24]"
+                  placeholder="Username"
+                />
+                {errors.username && (
+                  <p className="text-red-500 text-xs mt-2 font-bold">
+                    {errors.username}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col">
+                <Label className="text-xs font-black text-amber-400 dark:text-[#fbbf24] uppercase tracking-widest mb-2">
                   Email Address
-                </label>
-                <input
+                </Label>
+                <Input
                   type="email"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  className="w-full bg-transparent text-xl text-gray-900 dark:text-white focus:outline-none placeholder-gray-400 dark:placeholder-[#3b353c] font-black tracking-tighter "
+                  className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter text-gray-900 dark:text-white focus-visible:border-amber-400 focus-visible:ring-0 placeholder:text-gray-400 dark:border-[#3b353c] dark:placeholder:text-[#3b353c] dark:focus-visible:border-[#fbbf24]"
                   placeholder="Email"
                 />
                 {errors.email && (
@@ -151,17 +189,17 @@ export default function SignUp() {
                 )}
               </div>
 
-              <div className="flex flex-col border-b border-gray-300 dark:border-[#3b353c] pb-2">
-                <label className="block text-xs font-black text-amber-500 dark:text-[#e7c965] uppercase tracking-widest mb-2">
+              <div className="flex flex-col">
+                <Label className="text-xs font-black text-amber-400 dark:text-[#fbbf24] uppercase tracking-widest mb-2">
                   Password
-                </label>
-                <input
+                </Label>
+                <Input
                   type="password"
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  className="w-full bg-transparent text-xl text-gray-900 dark:text-white focus:outline-none placeholder-gray-400 dark:placeholder-[#3b353c] font-black tracking-tighter "
+                  className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter text-gray-900 dark:text-white focus-visible:border-amber-400 focus-visible:ring-0 placeholder:text-gray-400 dark:border-[#3b353c] dark:placeholder:text-[#3b353c] dark:focus-visible:border-[#fbbf24]"
                   placeholder="••••••••"
                 />
                 {errors.password && (
@@ -171,25 +209,19 @@ export default function SignUp() {
                 )}
               </div>
 
-              <button
+              <Button
                 type="submit"
-                className="group relative px-12 py-5 bg-transparent overflow-hidden rounded-full ring-2 ring-amber-500/50 dark:ring-[#e7c965]/50 text-gray-900 dark:text-white hover:text-white dark:hover:text-black hover:ring-amber-500 dark:hover:ring-[#e7c965] transition-all duration-500 inline-flex items-center justify-center w-full mt-4"
+                className="h-auto w-full rounded-md bg-amber-400 px-12 py-5 text-sm font-black uppercase tracking-widest text-white hover:bg-gray-900 dark:bg-[#fbbf24] dark:text-[#090909] dark:hover:bg-[#c1cfc1] mt-4"
               >
-                <div className="absolute inset-0 w-0 bg-amber-500 dark:bg-gradient-to-r dark:from-[#e7c965] dark:to-[#b3a473] transition-all duration-300 ease-in-out group-hover:w-full rounded-r-full"></div>
-                <span className="relative font-black tracking-[0.1em] uppercase flex items-center gap-4">
-                  <span>Create Account</span>{" "}
-                  <span className="text-xl group-hover:translate-x-2 transition-transform">
-                    →
-                  </span>
-                </span>
-              </button>
+                Create Account →
+              </Button>
             </form>
 
             <p className="mt-12 text-center text-sm font-bold tracking-widest uppercase text-gray-600 dark:text-[#82717b]">
               Already have an account?{" "}
               <Link
                 href="/auth/signin"
-                className="text-purple-600 dark:text-[#8254ee] hover:text-gray-900 dark:hover:text-white transition-colors border-b border-purple-600/30 dark:border-[#8254ee]/30 hover:border-gray-900 dark:hover:border-white pb-1 ml-2"
+                className="text-purple-500 dark:text-[#a855f7] hover:text-gray-900 dark:hover:text-white transition-colors border-b border-purple-500/30 dark:border-[#a855f7]/30 hover:border-gray-900 dark:hover:border-white pb-1 ml-2"
               >
                 Sign In
               </Link>

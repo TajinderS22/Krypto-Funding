@@ -1,30 +1,39 @@
-import { integer, pgTable, varchar, jsonb, timestamp, real, uuid, numeric, text, boolean } from "drizzle-orm/pg-core";
+import {
+  integer,
+  pgTable,
+  varchar,
+  jsonb,
+  timestamp,
+  real,
+  uuid,
+  numeric,
+  text,
+  boolean,
+} from "drizzle-orm/pg-core";
 
 export const usersTable = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   firstname: varchar({ length: 255 }).notNull(),
-  lastname: varchar({length:255}),
+  lastname: varchar({ length: 255 }),
   email: varchar({ length: 255 }).notNull().unique(),
-  username:varchar({length:255}).unique(),
-  password:varchar({length:255}).notNull()  
+  username: varchar({ length: 255 }).unique(),
+  password: varchar({ length: 255 }).notNull(),
 });
-
 
 export const adminsTable = pgTable("admins", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   firstname: varchar({ length: 255 }).notNull(),
-  lastname: varchar({length:255}),
+  lastname: varchar({ length: 255 }),
   email: varchar({ length: 255 }).notNull().unique(),
-  username:varchar({length:255}).unique(),
-  password:varchar({length:255}).notNull()  
+  username: varchar({ length: 255 }).unique(),
+  password: varchar({ length: 255 }).notNull(),
 });
 
-
-
-
-export const challanges = pgTable("challenges", {
+export const challenges = pgTable("challenges", {
   id: uuid().defaultRandom().primaryKey(),
-  creator_id: integer().notNull().references(() => adminsTable.id),
+  creator_id: integer()
+    .notNull()
+    .references(() => adminsTable.id),
   title: varchar({ length: 255 }).notNull(),
   description: text(),
   steps: integer(),
@@ -36,38 +45,66 @@ export const challanges = pgTable("challenges", {
   updated_at: timestamp({ withTimezone: true }).defaultNow(),
 });
 
-
-export const challengeStatus = pgTable("challenge_status",{
+export const challengeStatus = pgTable("challenge_status", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  user_id: integer().notNull().references(()=> usersTable.id),
+  user_id: integer()
+    .notNull()
+    .references(() => usersTable.id),
   currentStepStatus: integer(),
   steps: integer(),
-  challenge_id: uuid().notNull().references(()=> challanges.id),
-  status: varchar({length:50}).notNull(),
+  challenge_id: uuid()
+    .notNull()
+    .references(() => challenges.id),
+  status: varchar({ length: 50 }).notNull(),
   passed: boolean().notNull(),
   has_api_key: boolean().notNull().default(false),
   passed_at: timestamp({ withTimezone: true }),
+  purchase_id: integer()
+    .notNull()
+    .references(() => purchases.id),
+  value: integer(),
+  current_balance: integer(),
   updated_at: timestamp({ withTimezone: true }).defaultNow(),
 });
 
-
-export const purchases= pgTable("purchases",{
+export const purchases = pgTable("purchases", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  user_id: integer().notNull().references(()=> usersTable.id),
-  challenge_id: uuid().notNull().references(()=> challanges.id),
+  user_id: integer()
+    .notNull()
+    .references(() => usersTable.id),
+  challenge_id: uuid()
+    .notNull()
+    .references(() => challenges.id),
   purchase_date: timestamp({ withTimezone: true }).defaultNow(),
-})
+});
 
-
-export const  apiKeys = pgTable("api_keys",{
+export const apiKeys = pgTable("api_keys", {
   id: uuid().defaultRandom().primaryKey(),
-  user_id: integer().notNull().references(()=> usersTable.id),
-  challenge_id: uuid().notNull().references(()=>challanges.id),
-  pruchase_id: integer().notNull().references(()=>purchases.id),
+  user_id: integer()
+    .notNull()
+    .references(() => usersTable.id),
+  challenge_id: uuid()
+    .notNull()
+    .references(() => challenges.id),
+  pruchase_id: integer()
+    .notNull()
+    .references(() => purchases.id),
   encrypted_api_key_credentials: text().notNull(),
   iv: text().notNull(),
   auth_tag: text().notNull(),
   key_version: integer().default(1),
-  created_at: timestamp().defaultNow()
-})
+  created_at: timestamp().defaultNow(),
+});
 
+export const exchangeData = pgTable("exchangeData", {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  user_id: integer()
+    .notNull()
+    .references(() => usersTable.id),
+  challenge_id: uuid()
+    .notNull()
+    .references(() => challenges.id),
+  purchase_id: integer()
+    .notNull()
+    .references(() => purchases.id),
+});

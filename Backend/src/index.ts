@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import apiRouter from "./routes/api.js";
+import "./service/cron/syncUserBybitClients.js"
 
 dotenv.config({
   path: "../.env",
