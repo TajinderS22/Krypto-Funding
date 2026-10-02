@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UserSchema } from "../../validation/userSchema.js";
 
-// -- Mock all external modules before any imports --
-
 // Drizzle DB chaining mock
 const mockWhere = vi.fn().mockResolvedValue([]);
 const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
@@ -38,8 +36,6 @@ vi.mock("../../Utils/redisClient.js", () => ({
   },
 }));
 
-// -- Test data & helpers --
-
 const validUserData = {
   firstname: "John",
   lastname: "Doe",
@@ -58,8 +54,6 @@ function createReqRes(body?: unknown) {
     status,
   };
 }
-
-// -- Tests --
 
 describe("POST /auth/signup — validation flow", () => {
   let userRouter: any;
@@ -153,7 +147,7 @@ describe("POST /auth/signup — validation flow", () => {
       expect(mockInsert).toHaveBeenCalled();
       const insertedData = mockValues.mock.calls[0]?.[0];
       expect(insertedData?.email).toBe("john@example.com");
-      expect(insertedData?.password).toContain("$2b$10$"); // bcrypt-hashed
+      expect(insertedData?.password).toContain("$2b$10$");
     });
 
     it("returns 200 on success", async () => {

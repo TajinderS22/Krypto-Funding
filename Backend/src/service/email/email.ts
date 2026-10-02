@@ -17,6 +17,32 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+
+export interface EmailOptions {
+  to?: string;
+  subject: string;
+  html: string;
+}
+
+export const sendEmail = async (data: EmailOptions) => {
+  const recipient = data.to ;
+  try {
+    if (!recipient) {
+    throw new Error("No recipient defined for email");
+  }
+  await transporter.sendMail({
+    from: '"Krypto Funding" <no-reply.krypto-funding@tajinder.in>',
+    to: recipient,
+    subject: data.subject,
+    html: data.html,
+  });
+  } catch (error) {
+    console.log(error)
+  }
+};
+
+
+
 export const sendWelocmeEmail = async (user: UserType) => {
   await transporter.sendMail({
     from: '"Krypto Funding" <no-reply.krypto-funding@tajinder.in>',

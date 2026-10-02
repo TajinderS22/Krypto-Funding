@@ -66,6 +66,9 @@ api.interceptors.response.use(
         processQueue(null);
         return api(originalRequest);
       } catch {
+        await axios
+          .post("/auth/logout")
+          .catch(() => {});
         processQueue(error);
         return Promise.reject(error);
       }

@@ -3,7 +3,12 @@ import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import apiRouter from "./routes/api.js";
-import "./service/cron/syncUserBybitClients.js"
+import "./service/cron/syncUserBybitClients.js";
+import { syncUsers } from "./service/cron/syncUserBybitClients.js";
+import "./service/bybit/updateUserExchangeData.js";
+import "./service/BullMQ/balanceCheckScheduler.js";
+import "./service/BullMQ/balanceActionWorker.js"
+import "./service/BullMQ/emailService.js"
 
 dotenv.config({
   path: "../.env",
@@ -28,6 +33,8 @@ app.get("/", (req, res) => {
     message: "Hello from Tajinder Singh.",
   });
 });
+
+syncUsers();
 
 app.use("/api/v1", apiRouter);
 

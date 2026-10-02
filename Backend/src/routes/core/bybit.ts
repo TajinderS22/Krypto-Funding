@@ -8,7 +8,6 @@ bybitRouter.post("/status-update", userMiddleware, async (req, res) => {
   const userId = (req as any).user_id.user.id;
   const { challengeId, purchaseId } = req.body;
 
-  console.log(challengeId,"challengeId")
 
   try {
     const data = await freshAccountData({ userId, challengeId, purchaseId });

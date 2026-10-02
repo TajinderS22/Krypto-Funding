@@ -1,4 +1,4 @@
-import clients from "../../Utils/clients.js";
+import clients, { getClientKey } from "../../Utils/clients.js";
 
 type FreshAccountDataInput = {
   userId: string;
@@ -11,41 +11,50 @@ const freshAccountData = async ({
   challengeId,
   purchaseId,
 }: FreshAccountDataInput) => {
-  const client = clients.get(userId);
+  try {
+    const client = clients.get(getClientKey(userId, purchaseId)) || clients.get(userId + purchaseId);
 
-  console.log(client);
+    // const orderHistory = await client?.getHistoricOrders({
+    //   category: "linear",
+    //   limit: 50,
+    // });
 
-  const orderHistory = await client?.getHistoricOrders({
-    category: "linear",
-    limit: 50,
-  });
 
-  const tradeHistory = await client?.getExecutionList({
-    category: "linear",
-  });
+    // const tradeHistory = await client?.getExecutionList({
+    //   category: "linear",
+    // });
 
-  const activeOrders = await client?.getActiveOrders({
-    category: "linear",
-    limit: 50,
-    settleCoin: "USDT",
-  });
+    // const activeOrders = await client?.getActiveOrders({
+    //   category: "linear",
+    //   limit: 50,
+    //   settleCoin: "USDT",
+    // });
 
-  const closedPositions = await client?.getClosedPnL({
-    category: "linear",
-  });
+    const closedPositions = await client?.getClosedPnL({
+      category: "linear",
+    });
 
-  const walletBalance = await client?.getWalletBalance({
-    accountType: "UNIFIED",
-    coin: "USDT",
-  });
 
-  return {
-    orderHistory,
-    tradeHistory,
-    activeOrders,
-    closedPositions,
-    walletBalance,
-  };
+
+
+    const walletBalance = await client?.getWalletBalance({
+      accountType: "UNIFIED",
+      coin: "USDT",
+    });
+
+
+
+    return {
+    //   orderHistory,
+    //   tradeHistory,
+    //   activeOrders,
+      closedPositions,
+    //   transactionLog,
+      walletBalance,
+    };
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export default freshAccountData;

@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasToken = request.cookies.has('accessToken') || request.cookies.has('refreshToken');
+  const hasAccessToken = request.cookies.has('accessToken');
+  const hasRefreshToken = request.cookies.has('refreshToken');
+  const hasSession = hasAccessToken || hasRefreshToken;
 
-  if (pathname.startsWith('/client') && !hasToken) {
+  // Protect client routes — allow through if any token exists (refresh may still work server-side)
+  if (pathname.startsWith('/client') && !hasSession) {
     return NextResponse.redirect(new URL('/auth/signin', request.url));
   }
 
-  if (pathname.startsWith('/admin/dashboard') && !hasToken) {
+  // Protect admin routes — same logic
+  if (pathname.startsWith('/admin/dashboard') && !hasSession) {
     return NextResponse.redirect(new URL('/admin/auth/signin', request.url));
   }
 
-  if (hasToken) {
+  // Redirect away from auth pages — only if accessToken proves an active session
+  if (hasAccessToken) {
     if (pathname === '/admin/auth/signin' || pathname === '/admin/auth/signup') {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url));
     }

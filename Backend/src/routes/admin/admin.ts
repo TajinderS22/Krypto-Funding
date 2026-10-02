@@ -143,7 +143,7 @@ adminRouter.post("/auth/verify-otp", async (req, res) => {
   });
 
   await redis.set(`admin_session:${email}`, refreshToken, {
-    ex: 7 * 24 * 3600,
+    EX: 7 * 24 * 3600,
   });
 
   res.status(200).json({
@@ -193,7 +193,7 @@ adminRouter.post("/auth/refresh", async (req, res) => {
     });
 
     await redis.set(`admin_session:${payload.user.email}`, newRefreshToken, {
-      ex: 7 * 24 * 3600,
+      EX: 7 * 24 * 3600,
     });
 
     res.json({ message: "Refreshed" });

@@ -1,10 +1,10 @@
 import cron from "node-cron";
-import { apiKeys, purchases, usersTable } from "../Drizzle/db/schema.js";
+import { apiKeys, challengeStatus, purchases, usersTable } from "../Drizzle/db/schema.js";
 import db from "../Drizzle/index.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { syncClients } from "../../Utils/clients.js";
 
-const syncUsers = async () => {
+export const syncUsers = async () => {
   const users = await db
     .select({
       userId: usersTable.id,
@@ -14,12 +14,26 @@ const syncUsers = async () => {
       authTag: apiKeys.auth_tag,
     })
     .from(usersTable)
-    .rightJoin(apiKeys, eq(usersTable.id, apiKeys.user_id))
-    .innerJoin(purchases, and(eq(purchases.user_id, usersTable.id),eq(purchases.id, apiKeys.pruchase_id),));
+    .innerJoin(purchases, eq(purchases.user_id, usersTable.id))
+    .innerJoin(
+      challengeStatus,
+      and(
+        eq(challengeStatus.user_id, usersTable.id),
+        eq(challengeStatus.purchase_id, purchases.id),
+        inArray(challengeStatus.status, ["active", "partially_passed"]),
+        eq(challengeStatus.has_api_key, true),
+      ),
+    )
+    .innerJoin(
+      apiKeys,
+      and(
+        eq(apiKeys.user_id, usersTable.id),
+        eq(apiKeys.purchase_id, purchases.id),
+        eq(apiKeys.current_step, challengeStatus.current_step),
+      ),
+    );
 
-  console.log(users);
-
-  users.map((user) => {
+  users.forEach((user) => {
     syncClients(user);
   });
 };

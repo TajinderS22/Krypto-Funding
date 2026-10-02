@@ -13,7 +13,7 @@ const sendOtpService = async (email: string, prefix?: string) => {
   const hashed = hashOtp(otp);
 
   const keyPrefix = prefix ? `${prefix}_` : '';
-  await redis.set(`${keyPrefix}otp:${email}`, hashed, { ex: 300 });
+  await redis.set(`${keyPrefix}otp:${email}`, hashed, { EX: 300 });
 
   await redis.del(`${keyPrefix}otp_attempts:${email}`);
 

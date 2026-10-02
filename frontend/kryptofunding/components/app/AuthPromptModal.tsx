@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, UserPlus, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,9 +22,21 @@ export default function AuthPromptModal({
 }: AuthPromptModalProps) {
   const router = useRouter();
   const [countdown, setCountdown] = useState(5);
+  const navigating = useRef(false);
+
+  const navigate = useCallback(
+    (path: string) => {
+      if (navigating.current) return;
+      navigating.current = true;
+      onClose?.();
+      router.push(path);
+    },
+    [onClose, router],
+  );
 
   useEffect(() => {
     if (!isOpen) {
+      navigating.current = false;
       setCountdown(5);
       return;
     }
@@ -33,7 +45,7 @@ export default function AuthPromptModal({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          router.push("/auth/signup");
+          navigate("/auth/signup");
           return 0;
         }
         return prev - 1;
@@ -41,7 +53,7 @@ export default function AuthPromptModal({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isOpen, router]);
+  }, [isOpen, navigate]);
 
   return (
     <Dialog
@@ -72,14 +84,14 @@ export default function AuthPromptModal({
 
           <div className="flex flex-col gap-3">
             <Button
-              onClick={() => router.push("/auth/signin")}
+              onClick={() => navigate("/auth/signin")}
               className="h-auto w-full rounded-md bg-purple-500 px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-purple-600 dark:bg-[#a855f7] dark:hover:bg-[#c084fc]"
             >
               <LogIn className="w-4 h-4" /> Sign In
             </Button>
 
             <Button
-              onClick={() => router.push("/auth/signup")}
+              onClick={() => navigate("/auth/signup")}
               className="h-auto w-full rounded-md bg-amber-400 px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-gray-900 dark:bg-[#fbbf24] dark:text-[#090909] dark:hover:bg-[#c1cfc1]"
             >
               <UserPlus className="w-4 h-4" /> Sign Up

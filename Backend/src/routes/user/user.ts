@@ -21,7 +21,7 @@ import { encrypt } from "../../service/encryption/encrypt.js";
 import { decrypt } from "../../service/encryption/decrypt.js";
 import { createLanguageService } from "typescript";
 import createClient from "../../service/bybit/createClient.js";
-import clients from "../../Utils/clients.js";
+import clients, { getClientKey } from "../../Utils/clients.js";
 
 dotenv.config({
   path: "../../.env",
@@ -149,7 +149,7 @@ userRouter.post("/auth/verify-otp", async (req, res) => {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
-  await redis.set(`session:${email}`, refreshToken, { ex: 7 * 24 * 3600 });
+  await redis.set(`session:${email}`, refreshToken, { EX: 7 * 24 * 3600 });
 
   res.status(200).json({
     message: "Authenticated",
@@ -198,7 +198,7 @@ userRouter.post("/auth/refresh", async (req, res) => {
     });
 
     await redis.set(`session:${payload.user.email}`, newRefreshToken, {
-      ex: 7 * 24 * 3600,
+      EX: 7 * 24 * 3600,
     });
 
     res.json({ message: "Refreshed" });
@@ -294,12 +294,19 @@ userRouter.get(
           status: {
             id: challengeStatus.id,
             status: challengeStatus.status,
-            passed: challengeStatus.passed,
-            currentStepStatus: challengeStatus.currentStepStatus,
+            fullyPassed: challengeStatus.fully_passed,
+            passedStep1: challengeStatus.passed_step_1,
+            passedStep2: challengeStatus.passed_step_2,
+            failed: challengeStatus.failed,
+            currentStep: challengeStatus.current_step,
             value: challengeStatus.value,
             currentBalance: challengeStatus.current_balance,
             steps: challengeStatus.steps,
             hasApiKey: challengeStatus.has_api_key,
+            fullyPassedAt: challengeStatus.fully_passed_at,
+            passedStep1At: challengeStatus.passed_step_1_at,
+            passedStep2At: challengeStatus.passed_step_2_at,
+            failedAt: challengeStatus.failed_at,
             updated_at: challengeStatus.updated_at,
           },
           challenge: {
@@ -332,10 +339,17 @@ userRouter.get(
         status: {
           id: number;
           status: string;
-          passed: boolean;
-          currentStepStatus: number | null;
+          fullyPassed: boolean;
+          passedStep1:boolean;
+          passedStep2:boolean;
+          failed: boolean;
+          currentStep: number | null;
           steps: number | null;
           hasApiKey: boolean;
+          fullyPassedAt: Date | null;
+          passedStep1At: Date | null;
+          passedStep2At: Date | null;
+          failedAt: Date | null;
           updated_at: Date | null;
         };
         challenge: {
@@ -353,11 +367,16 @@ userRouter.get(
         };
       }[];
 
-      const active = myChallenges.filter((mc) => mc.status.status === "active");
+      // partially_passed (stage 1 done, later stage running) is still in
+      // progress: it must ship in the active bucket or the detail page
+      // can never find the row.
+      const active = myChallenges.filter(
+        (mc) =>
+          mc.status.status === "active" ||
+          mc.status.status === "partially_passed",
+      );
       const failed = myChallenges.filter((mc) => mc.status.status === "failed");
       const passed = myChallenges.filter((mc) => mc.status.status === "passed");
-
-      console.log(myChallenges.length);
 
       res.status(200).json({ active, failed, passed });
     } catch (error) {
@@ -399,8 +418,8 @@ userRouter.post("/challenges/buy", userMiddleware, async (req, res) => {
         user_id: userId,
         challenge_id: challengeId,
         status: "active",
-        passed: false,
-        currentStepStatus: 1,
+        // fully: false,
+        current_step: 1,
         steps: challenge.steps ?? 1,
         purchase_id: purchase!.id,
       })
@@ -435,16 +454,118 @@ userRouter.post("/api-key", userMiddleware, async (req, res) => {
   }
 
   try {
+    const [currentStatus] = await db
+      .select()
+      .from(challengeStatus)
+      .where(
+        and(
+          eq(challengeStatus.user_id, userId),
+          eq(challengeStatus.purchase_id, purchaseId),
+        ),
+      );
+
+    if (!currentStatus) {
+      res.status(404).json({
+        message: "Challenge status not found",
+      });
+      return;
+    }
+
+    const [challenge] = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId));
+
+    // A mismatched challengeId would insert the key row but match no status
+    // row (the UPDATE filters on challenge_id), leaving has_api_key=false
+    // forever while the duplicate-check short-circuits every retry.
+    if (!challenge || currentStatus.challenge_id !== challengeId) {
+      res.status(400).json({
+        message: "Challenge does not match this purchase",
+      });
+      return;
+    }
+
+    const challengeValue = challenge.value;
+
+    if (challengeValue == null) {
+      res.status(400).json({
+        message: "Challenge value not found",
+      });
+      return;
+    }
+
+    const currentStep = currentStatus.current_step ?? 1;
+    const totalSteps = currentStatus.steps ?? challenge.steps ?? 1;
+    const liveSteps = challenge.steps ?? null;
+
+    // Stale terminal row: status claims "passed" but the final step was never
+    // finished (keys never submitted for the pointer step, or the pointer is
+    // behind the challenge's real step count). Such rows must resume, never
+    // block the user — see docs/challengeStatusFixPitch_001.md §1.
+    const isStalePassed =
+      currentStatus.status === "passed" &&
+      (currentStatus.has_api_key !== true ||
+        currentStep < totalSteps ||
+        (liveSteps != null && currentStep < liveSteps));
+
+    if (currentStatus.status === "failed") {
+      res.status(409).json({
+        message: "This challenge has already failed.",
+      });
+      return;
+    }
+
+    if (currentStatus.status === "passed" && !isStalePassed) {
+      res.status(409).json({
+        message: "This challenge is already completed.",
+      });
+      return;
+    }
+
+    // Pointer > 1 means a previous stage passed: record partially_passed
+    // (stage-1 done, current stage running). This also repairs stale rows
+    // whose status wrongly says "passed" — so the certificate can only ever
+    // render for a genuine full completion written by the balance worker.
+    // Failed/completed rows were rejected above, so clearing the terminal
+    // mirrors here is always safe.
+    const statusPatch = {
+      status: currentStep > 1 ? "partially_passed" : "active",
+      passed: false,
+      failed: false,
+      passed_at: null,
+      has_api_key: true,
+      value: challengeValue,
+      current_balance: String(challengeValue),
+      steps: isStalePassed
+        ? Math.max(currentStatus.steps ?? 0, liveSteps ?? 0) || 1
+        : (currentStatus.steps ?? liveSteps ?? 1),
+      updated_at: sql`now()`,
+    };
+
+    const statusWhere = and(
+      eq(challengeStatus.user_id, userId),
+      eq(challengeStatus.challenge_id, challengeId),
+      eq(challengeStatus.purchase_id, purchaseId),
+    );
+
     const encryptedApiCredentials = encrypt(apiCredentials);
 
     const isKeyPresent = await db
       .select()
       .from(apiKeys)
       .where(
-        and(eq(apiKeys.pruchase_id, purchaseId), eq(apiKeys.user_id, userId)),
+        and(
+          eq(apiKeys.purchase_id, purchaseId),
+          eq(apiKeys.user_id, userId),
+          eq(apiKeys.current_step, currentStep),
+        ),
       );
 
     if (isKeyPresent.length > 0) {
+      // Duplicate submit: the key row exists but the status row may still be
+      // stale — run the same normalization first so a retry is self-healing.
+      await db.update(challengeStatus).set(statusPatch).where(statusWhere);
       res.status(200).json({
         message: "Key already added for this purchase.",
       });
@@ -456,17 +577,13 @@ userRouter.post("/api-key", userMiddleware, async (req, res) => {
       .values({
         user_id: userId,
         challenge_id: challengeId,
-        pruchase_id: purchaseId,
-        encrypted_api_key_credentials: encryptedApiCredentials.encrypted,
-        iv: encryptedApiCredentials.iv,
-        auth_tag: encryptedApiCredentials.authTag,
+        purchase_id: purchaseId,
+        current_step: currentStep,
+        encrypted_api_key_credentials: encryptedApiCredentials!.encrypted,
+        iv: encryptedApiCredentials!.iv,
+        auth_tag: encryptedApiCredentials!.authTag,
       })
       .returning();
-
-    const currChallenge = await db
-      .select()
-      .from(challenges)
-      .where(eq(challenges.id, challengeId));
 
     if (!addedKey) {
       res.status(400).json({
@@ -475,37 +592,16 @@ userRouter.post("/api-key", userMiddleware, async (req, res) => {
       return;
     }
 
-    let client = clients.get(userId + purchaseId);
+    const clientKey = getClientKey(userId, purchaseId);
+    const client = createClient(apiKey, apiSecret);
+    clients.set(clientKey, client);
+    clients.set(userId + purchaseId, client);
 
-    if (!client) {
-      client = createClient(apiKey, apiSecret);
-      clients.set(userId + purchaseId, client);
-    }
-
-    const challengeValue = currChallenge[0]?.value;
-
-    if (challengeValue == null) {
-      res.status(400).json({
-        message: "Challenge value not found",
-      });
-      return;
-    }
     const updatedStatus = await db
       .update(challengeStatus)
-      .set({
-        has_api_key: true,
-        value: challengeValue,
-        current_balance: challengeValue,
-      })
-      .where(
-        and(
-          eq(challengeStatus.user_id, userId),
-          eq(challengeStatus.challenge_id, challengeId),
-          eq(challengeStatus.purchase_id, purchaseId),
-        ),
-      )
+      .set(statusPatch)
+      .where(statusWhere)
       .returning();
-
 
     const params = {
       adjustType: 0 as const,
@@ -521,9 +617,13 @@ userRouter.post("/api-key", userMiddleware, async (req, res) => {
 
     res.status(200).json({
       message: " saved your credentials successfully ",
+      status: updatedStatus[0]?.status ?? null,
     });
   } catch (error) {
     console.error(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 });
 
