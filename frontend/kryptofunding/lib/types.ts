@@ -7,6 +7,12 @@ export type Challenge = {
   price: number;
   steps?: number | null;
   drawdown?: number | null;
+  // Daily drawdown casing depends on the endpoint: raw selects
+  // (GET /user/challenges, GET /admin/challenges) return snake_case
+  // `daily_drawdown`, while my-challenges aliases it to `dailyDrawdown`.
+  // Read as `dailyDrawdown ?? daily_drawdown`.
+  daily_drawdown?: number | null;
+  dailyDrawdown?: number | null;
   target?: number | null;
   created_at: Date;
   updated_at: Date;
@@ -19,7 +25,12 @@ export type ChallengeStatus = {
   // keys) | "passed" (FULL completion — only this may render the
   // certificate) | "failed".
   status: string;
-  passed: boolean;
+  // Terminal mirrors written by the balance worker. `passed`/`passed_at`
+  // were dropped from the schema (renamed to passed_step_1 / passed_step_1_at)
+  // and are no longer sent by the API — use the fields below instead.
+  fullyPassed?: boolean | null;
+  passedStep1?: boolean | null;
+  passedStep2?: boolean | null;
   failed: boolean;
   currentStep: number | null;
   steps: number | null;
@@ -29,8 +40,12 @@ export type ChallengeStatus = {
   hasApiKey: boolean | null | undefined;
   value: number;
   currentBalance: number;
-  passedAt?: string | null;
+  fullyPassedAt?: string | null;
+  passedStep1At?: string | null;
+  passedStep2At?: string | null;
   failedAt?: string | null;
+  failedReasonCode?: string | null;
+  failedReason?: string | null;
   updated_at: string;
 };
 

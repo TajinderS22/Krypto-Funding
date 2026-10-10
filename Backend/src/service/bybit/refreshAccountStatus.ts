@@ -1,4 +1,5 @@
 import clients, { getClientKey } from "../../Utils/clients.js";
+import { getMergedClosedPnL } from "./closedPnL.js";
 
 type FreshAccountDataInput = {
   userId: string;
@@ -12,7 +13,7 @@ const freshAccountData = async ({
   purchaseId,
 }: FreshAccountDataInput) => {
   try {
-    const client = clients.get(getClientKey(userId, purchaseId)) || clients.get(userId + purchaseId);
+    const client = clients.get(getClientKey(Number(userId), Number(purchaseId))) || clients.get(userId + purchaseId);
 
     // const orderHistory = await client?.getHistoricOrders({
     //   category: "linear",
@@ -30,9 +31,14 @@ const freshAccountData = async ({
     //   settleCoin: "USDT",
     // });
 
-    const closedPositions = await client?.getClosedPnL({
-      category: "linear",
+    // Full merged history (Redis/Postgres + one fresh Bybit page) instead of
+    // Bybit's default 50-row page, so metrics cover every closed trade.
+    const { trades } = await getMergedClosedPnL({
+      userId: Number(userId),
+      purchaseId: Number(purchaseId),
+      client,
     });
+    const closedPositions = { result: { list: trades } };
 
 
 

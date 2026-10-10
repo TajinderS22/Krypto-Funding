@@ -6,6 +6,7 @@ import {
   challengeStatus,
   dailySnapshot,
   exchangeData,
+  passCertificate,
   purchases,
   usersTable,
 } from "../Drizzle/db/schema.js";
@@ -14,14 +15,18 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import emailQueue from "./emailService.js";
 import redis from "../../Utils/redisClient.js";
 import { exit } from "process";
-
-const readList = (data: any | null, key: string): any[] => {
-  const result = data?.[key] as any | undefined;
-  const nested = result?.result as any | undefined;
-  const list = nested?.list;
-
-  return Array.isArray(list) ? (list as any[]) : [];
-};
+import { triggerDailySnapshot } from "./dailySnapshot.js";
+import {
+  balanceHistoryCacheKey,
+  fetchClosedPnLPage,
+  loadClosedTradesFromDb,
+  mergeClosedTrades,
+  numberValue,
+  realtimeExchangeKey,
+  totalPnl,
+  tradeTime,
+  type ClosedTrade,
+} from "../bybit/closedPnL.js";
 
 // Rows in either in-progress status can still transition (stage-advance,
 // terminal pass, fail). "partially_passed" = a previous stage passed and the
@@ -39,6 +44,12 @@ new Worker(
         coin: "USDT",
       });
       const accountBalance = bal?.result.list[0]?.totalMarginBalance;
+      const walletCoins = bal?.result.list[0]?.coin ?? [];
+      const usdtCoin =
+        walletCoins.find((coin: any) => coin.coin === "USDT") ?? walletCoins[0];
+      // Same equity field the frontend chart anchors on.
+      const equityNow =
+        numberValue(usdtCoin?.equity) ?? numberValue(accountBalance);
       const drawdownAmount =
         (account.challenges?.value * account.challenges?.drawdown) / 100;
       const accountVlaue = account.challenges?.value;
@@ -46,20 +57,25 @@ new Worker(
         (account.challenges?.value * account.challenges.target) / 100;
       const minBalance = accountVlaue - drawdownAmount;
       const targetBalance = accountVlaue + targetAmount;
-      const closedPositions = await client?.getClosedPnL({
-        category: "linear",
-      });
-      const closed = readList(closedPositions, "closedPositions");
+
+      // Full merged history: ONE fresh Bybit page (limit 100 instead of the
+      // default 50) unioned with whatever Redis/Postgres already accumulated.
+      // Same API budget as before — history grows trade-by-trade over cycles.
+      const historyKey = realtimeExchangeKey(account.userId, account.purchaseId);
+      const cachedDataString = await redis.get(historyKey);
+      const cacheMissing =
+        cachedDataString === null || cachedDataString === undefined;
+      const stored: ClosedTrade[] = cacheMissing
+        ? await loadClosedTradesFromDb(account.userId, account.purchaseId)
+        : JSON.parse(cachedDataString) || [];
+      const freshPage = (await fetchClosedPnLPage(client)) ?? [];
+      const closed = mergeClosedTrades(stored, freshPage);
+
       const wins = closed.reduce(
         (count, item) => count + (Number(item.closedPnl) > 0 ? 1 : 0),
         0,
       );
       const winRate = closed.length > 0 ? (wins / closed.length) * 100 : 0;
-
-      const numberValue = (value: unknown): number | null => {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : null;
-      };
 
       const grossLoss = closed.reduce((sum, item) => {
         const pnl = numberValue(item.closedPnl) ?? 0;
@@ -73,14 +89,20 @@ new Worker(
       const profitFactor =
         grossLoss == 0 ? "∞" : (grossProfit / grossLoss).toFixed(2);
 
-      const cachedDataString = await redis.get(
-        `realtime-exchange-data-${account.userId}-${account.purchaseId}`,
-      );
-      //   as Record<string, string | any[]> | null;
-
       const dailySnapshotDataString = await redis.get(
         `daily-snapshot-${account.userId}-${account.purchaseId}`,
       );
+
+      if (!dailySnapshotDataString) {
+        await triggerDailySnapshot(
+          account,
+          accountBalance,
+          String(winRate),
+          profitFactor,
+          closed,
+        );
+      }
+
       const dailySnapshot = JSON.parse(dailySnapshotDataString!);
       const dailyDrawdownPercentage =
         account.challenges.daily_drawdown ?? account.challenges.drawdown / 2;
@@ -89,132 +111,117 @@ new Worker(
       const minimumDailyBalance =
         dailySnapshot.account_balance - dailyDrawdownAmount;
 
-      const setRealTimeExchangeDataInCache = async () => {
-        await redis.set(
-          `realtime-exchange-data-${account.userId}-${account.purchaseId}`,
-          JSON.stringify(closedPositions),
+      const exchangeDataChanged = (
+        cachedTrades: ClosedTrade[],
+        closedTradesExchange: ClosedTrade[],
+      ): boolean => {
+        if (cachedTrades.length !== closedTradesExchange.length) {
+          return true;
+        }
+
+        if (closedTradesExchange.length === 0) {
+          return false;
+        }
+
+        const cachedLatest = cachedTrades[0];
+        const exchangeLatest = closedTradesExchange[0];
+        if (!cachedLatest || !exchangeLatest) {
+          return true;
+        }
+
+        return (
+          cachedLatest.orderId !== exchangeLatest.orderId ||
+          cachedLatest.updatedTime !== exchangeLatest.updatedTime ||
+          cachedLatest.closedPnl !== exchangeLatest.closedPnl
         );
       };
 
-      // sync exchange data in db and cache if there is any change in trades
-      {  if (!cachedDataString) {
-          const exist = await db
-            .select()
-            .from(exchangeData)
-            .where(
-              and(
-                eq(exchangeData.user_id, account.userId),
-                eq(exchangeData.purchase_id, account.purchaseId),
-                eq(exchangeData.current_step, account.currentStep),
-              ),
-            );
+      const changed = cacheMissing || exchangeDataChanged(stored, closed);
 
-          console.log(
-            "checking exchangeData entry in db if already exited?",
-            exist,
-          );
-
-          if (!exist) {
-            await db.insert(exchangeData).values({
-              user_id: account.userId,
-              purchase_id: account.purchaseId,
-              challenge_id: account.challengeStatus.challenge_id,
-              current_step: account.currentStep,
-              win_rate: String(winRate),
-              profit_factor: String(profitFactor),
-              closed_trades: closed,
-            });
-
-            await setRealTimeExchangeDataInCache();
-          } else {
-            await db
-              .update(exchangeData)
-              .set({
-                win_rate: String(winRate),
-                profit_factor: String(profitFactor),
-                closed_trades: closed,
-                updated_at: sql`now()`,
-              })
-              .where(
-                and(
-                  eq(exchangeData.user_id, account.userId),
-                  eq(exchangeData.purchase_id, account.purchaseId),
-                  eq(exchangeData.current_step, account.currentStep),
-                ),
-              );
-
-            await setRealTimeExchangeDataInCache();
-          }
-        }
-
-        const cachedData = JSON.parse(cachedDataString!);
-
-        console.log(
-          "inside balance action worker checking redis cache for exchange data",
-          cachedData,
+      const existingRows = await db
+        .select({
+          id: exchangeData.id,
+          starting_balance: exchangeData.starting_balance,
+          starting_at: exchangeData.starting_at,
+        })
+        .from(exchangeData)
+        .where(
+          and(
+            eq(exchangeData.user_id, account.userId),
+            eq(exchangeData.purchase_id, account.purchaseId),
+            eq(exchangeData.current_step, account.currentStep),
+          ),
         );
+      const row = existingRows[0];
 
-        const exchangeDataChanged = async (
-          cache: Record<string, string | any[]>,
-          cloasedTradesExchange: any[],
-        ) => {
-          const closedTradesFromCache = cache?.closed_trades;
-          if (!closedTradesFromCache) return false;
+      // Anchor the balance curve exactly once per row (capture-once):
+      // - existing row without an anchor (legacy): back-solve from the full
+      //   merged history so past trades stay on the curve;
+      // - brand-new stage > 1: anchor at current equity and ignore trades
+      //   carried over from the previous stage;
+      // - no trades yet: anchor at current equity, curve starts flat.
+      let capturedAnchor: { balance: number; at: number } | null = null;
+      if (numberValue(row?.starting_balance) === null && equityNow !== null) {
+        const carriedOverStage = !row && account.currentStep > 1;
+        if (!carriedOverStage && closed.length > 0) {
+          const times = closed.map(tradeTime).filter((time) => time > 0);
+          capturedAnchor = {
+            balance: equityNow - totalPnl(closed),
+            at: times.length > 0 ? Math.min(...times) : 0,
+          };
+        } else {
+          capturedAnchor = { balance: equityNow, at: Date.now() };
+        }
+      }
 
-          if (closedTradesFromCache.length !== cloasedTradesExchange?.length)
-            return true;
+      if (!row) {
+        await db.insert(exchangeData).values({
+          user_id: account.userId,
+          purchase_id: account.purchaseId,
+          challenge_id: account.challengeStatus.challenge_id,
+          current_step: account.currentStep,
+          win_rate: String(winRate),
+          profit_factor: String(profitFactor),
+          closed_trades: closed,
+          ...(capturedAnchor
+            ? {
+                starting_balance: String(capturedAnchor.balance),
+                starting_at: capturedAnchor.at,
+              }
+            : {}),
+        });
+      } else if (changed || capturedAnchor) {
+        await db
+          .update(exchangeData)
+          .set({
+            ...(changed
+              ? {
+                  win_rate: String(winRate),
+                  profit_factor: String(profitFactor),
+                  closed_trades: closed,
+                }
+              : {}),
+            ...(capturedAnchor
+              ? {
+                  starting_balance: String(capturedAnchor.balance),
+                  starting_at: capturedAnchor.at,
+                }
+              : {}),
+            updated_at: sql`now()`,
+          })
+          .where(eq(exchangeData.id, row.id));
+      }
 
-          return false;
-        };
-
-        if (await exchangeDataChanged(cachedData!, closed)) {
-          const exist = await db
-            .select()
-            .from(exchangeData)
-            .where(
-              and(
-                eq(exchangeData.user_id, account.userId),
-                eq(exchangeData.purchase_id, account.purchaseId),
-                eq(exchangeData.current_step, account.currentStep),
-              ),
-            );
-
-          console.log(
-            "checking exchangeData entry in db if already exited?",
-            exist,
+      if (changed) {
+        await redis.set(historyKey, JSON.stringify(closed));
+      }
+      if (changed || capturedAnchor) {
+        try {
+          await redis.del(
+            balanceHistoryCacheKey(account.userId, account.purchaseId),
           );
-
-          if (!exist) {
-            await db.insert(exchangeData).values({
-              user_id: account.userId,
-              purchase_id: account.purchaseId,
-              challenge_id: account.challengeStatus.challenge_id,
-              current_step: account.currentStep,
-              win_rate: String(winRate),
-              profit_factor: String(profitFactor),
-              closed_trades: closed,
-            });
-
-            await setRealTimeExchangeDataInCache();
-          } else {
-            await db
-              .update(exchangeData)
-              .set({
-                win_rate: String(winRate),
-                profit_factor: String(profitFactor),
-                closed_trades: closed,
-                updated_at: sql`now()`,
-              })
-              .where(
-                and(
-                  eq(exchangeData.user_id, account.userId),
-                  eq(exchangeData.purchase_id, account.purchaseId),
-                  eq(exchangeData.current_step, account.currentStep),
-                ),
-              );
-
-            await setRealTimeExchangeDataInCache();
-          }
+        } catch (cacheError) {
+          console.error("balance history cache invalidation failed", cacheError);
         }
       }
 
@@ -290,6 +297,15 @@ new Worker(
               );
             }
           } else {
+            const [cert] = await db
+              .insert(passCertificate)
+              .values({
+                user_id: account.userId,
+                purchase_id: account.purchaseId,
+                updated_at: sql`now()`,
+              })
+              .returning();
+
             const result = await db
               .update(challengeStatus)
               .set({
@@ -303,6 +319,7 @@ new Worker(
                 fully_passed: true,
                 fully_passed_at: sql`now()`,
                 status: "passed",
+                certificate_id: cert?.id,
               })
               .where(
                 and(
@@ -437,7 +454,7 @@ new Worker(
               purchaseId: account.purchaseId,
               accountBalance: accountBalance,
               failureReason: " Breached maximum drawdown limit ",
-              message:"Maximum drawdown breached"
+              message: "Maximum drawdown breached",
             },
             {
               attempts: 5,

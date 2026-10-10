@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
     Area,
     AreaChart,
-    CartesianGrid,
+    ReferenceLine,
     ResponsiveContainer,
     Tooltip,
     XAxis,
@@ -41,11 +41,155 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { MyChallenge } from "@/lib/types";
 
 type ExchangeRecord = Record<string, unknown>;
-type ChartPoint = { date: number; balance: number };
+type ChartPoint = { date: number; balance: number; deviation?: number };
+
+type BalanceMetrics = {
+    winRate: number;
+    profitFactor: string;
+    realizedPnl: number;
+    finalBalance: number | null;
+} | null;
+
+type BalanceHistory = {
+    startingBalance: number | null;
+    startingAt: number | null;
+    points: ChartPoint[];
+    tradeCount: number;
+    downsampled: boolean;
+    metrics: BalanceMetrics;
+};
 
 const numberValue = (value: unknown): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+};
+
+// Skip the state update (and therefore the whole account recompute + chart
+// re-render) when a poll returns byte-identical data.
+const isSamePayload = (prev: unknown, next: unknown): boolean => {
+    if (prev === next) return true;
+    try {
+        return JSON.stringify(prev) === JSON.stringify(next);
+    } catch {
+        return false;
+    }
+};
+
+// Fallback curve when the /core/balance-history endpoint is unavailable:
+// anchors on the challenge's starting balance (challenges.value) and walks
+// trades forward in one O(n) pass (the old implementation was O(n²)).
+const buildLocalChart = (
+    history: ExchangeRecord[],
+    equity: number | null,
+    mainLevel: number | null,
+): ChartPoint[] => {
+    if (history.length === 0) return [];
+
+    const trades = history
+        .map((item) => ({
+            timestamp:
+                numberValue(item.updatedTime) ??
+                numberValue(item.execTime) ??
+                numberValue(item.createdTime) ??
+                0,
+            pnl:
+                numberValue(item.closedPnl) ?? numberValue(item.execPnl) ?? 0,
+        }))
+        .filter((trade) => trade.timestamp > 0)
+        .sort((a, b) => a.timestamp - b.timestamp);
+    if (trades.length === 0) return [];
+
+    const total = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+    const anchor =
+        mainLevel ?? (equity !== null ? equity - total : null);
+    if (anchor === null) return [];
+
+    const points: ChartPoint[] = [
+        {
+            date: trades[0].timestamp - Math.max(Math.floor((trades[trades.length - 1].timestamp - trades[0].timestamp) * 0.05), 60_000),
+            balance: anchor,
+            deviation: 0,
+        },
+    ];
+    let balance = anchor;
+    for (const trade of trades) {
+        balance += trade.pnl;
+        points.push({
+            date: trade.timestamp,
+            balance,
+            deviation: balance - anchor,
+        });
+    }
+    return points;
+};
+
+// Y-domain: always keeps the main level ±3% visible (the deviation range),
+// expanding when the balance moves past 3%. Shared by the YAxis and the fill
+// baseline so the gradient color split lands exactly on the level line.
+const yDomainFor = (
+    dataMin: number,
+    dataMax: number,
+    level: number | null,
+): [number, number] => {
+    const lower =
+        level === null
+            ? dataMin
+            : Math.min(dataMin, level - Math.abs(level) * 0.03);
+    const upper =
+        level === null
+            ? dataMax
+            : Math.max(dataMax, level + Math.abs(level) * 0.03);
+    const pad = Math.max((upper - lower) * 0.05, 0);
+    return [lower - pad, upper + pad];
+};
+
+// Deterministic nice time ticks aligned to wall-clock boundaries. Replacing
+// recharts' auto ticks keeps the axis from rendering duplicate day labels
+// ("4 Oct" ×4) and from clustering ticks/labels at the data edge.
+const TICK_STEPS = [
+    5 * 60_000,
+    15 * 60_000,
+    30 * 60_000,
+    3_600_000,
+    2 * 3_600_000,
+    3 * 3_600_000,
+    6 * 3_600_000,
+    12 * 3_600_000,
+    86_400_000,
+    2 * 86_400_000,
+    3 * 86_400_000,
+    7 * 86_400_000,
+    14 * 86_400_000,
+    30 * 86_400_000,
+    90 * 86_400_000,
+];
+
+const timeTicksFor = (
+    points: ChartPoint[],
+): { ticks: number[]; step: number } | null => {
+    if (points.length < 2) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const point of points) {
+        if (point.date < min) min = point.date;
+        if (point.date > max) max = point.date;
+    }
+    const span = max - min;
+    if (!(span > 0)) return null;
+    const target = span / 6;
+    const step =
+        TICK_STEPS.find((candidate) => candidate >= target) ??
+        Math.ceil(target / 90_000_000) * 90_000_000;
+    const ticks: number[] = [];
+    for (
+        let tick = Math.ceil(min / step) * step;
+        tick <= max;
+        tick += step
+    ) {
+        ticks.push(tick);
+    }
+    if (ticks.length === 0) return { ticks: [min, max], step };
+    return { ticks, step };
 };
 
 const readList = (
@@ -83,12 +227,14 @@ function MetricCard({
     detail,
     icon: Icon,
     tone = "default",
+    valueClassName = "",
 }: {
     label: string;
     value: string;
     detail: string;
     icon: typeof WalletCards;
     tone?: "default" | "positive" | "warning";
+    valueClassName?: string;
 }) {
     const tones = {
         default:
@@ -109,7 +255,7 @@ function MetricCard({
                         <Icon className="size-4" />
                     </span>
                 </div>
-                <p className="text-2xl font-black tracking-tighter sm:text-3xl">
+                <p className={`text-2xl font-black tracking-tighter sm:text-3xl ${valueClassName}`}>
                     {value}
                 </p>
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-[#82717b]">
@@ -127,6 +273,7 @@ export default function ClientChallengePage() {
     const router = useRouter();
     const [myChallenge, setMyChallenge] = useState<MyChallenge | null>(null);
     const [exchangeData, setExchangeData] = useState<ExchangeRecord | null>(null);
+    const [balanceHistory, setBalanceHistory] = useState<BalanceHistory | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -141,16 +288,48 @@ export default function ClientChallengePage() {
         challenge: MyChallenge,
         refreshing = false,
     ) => {
-        // Live phase only: keys submitted for the current step and no
-        // terminal state. Null-safe — legacy rows carry NULL, not false.
-        if (phaseOf(challenge) !== "live") return;
+        const isLive = phaseOf(challenge) === "live";
+       
         if (refreshing) setIsRefreshing(true);
         try {
-            const response = await api.post("/core/status-update", {
-                challengeId: challenge.challenge.id,
-                purchaseId: challenge.purchase_id,
-            });
-            setExchangeData(response.data as ExchangeRecord);
+            const statusRequest = isLive
+                ? api.post("/core/status-update", {
+                    challengeId: challenge.challenge.id,
+                    purchaseId: challenge.purchase_id,
+                })
+                : Promise.resolve(null);
+            const historyRequest = api
+                .get("/core/balance-history", {
+                    params: {
+                        challengeId: challenge.challenge.id,
+                        purchaseId: challenge.purchase_id,
+                    },
+                })
+                .catch((historyError) => {
+                    console.error(
+                        "Could not refresh balance history",
+                        historyError,
+                    );
+                    return null;
+                });
+
+            const [statusResponse, historyResponse] = await Promise.all([
+                statusRequest,
+                historyRequest,
+            ]);
+
+            if (statusResponse) {
+                const next = statusResponse.data as ExchangeRecord;
+                setExchangeData((prev) =>
+                    isSamePayload(prev, next) ? prev : next,
+                );
+            }
+            if (historyResponse) {
+                const next = historyResponse.data as BalanceHistory;
+                setBalanceHistory((prev) =>
+                    isSamePayload(prev, next) ? prev : next,
+                );
+            }
         } catch (requestError) {
             console.error("Could not refresh exchange data", requestError);
         } finally {
@@ -184,9 +363,12 @@ export default function ClientChallengePage() {
                     return;
                 }
                 setMyChallenge(found);
-                if (found.status?.hasApiKey === true) {
+                const status = found.status;
+                const isTerminal =
+                    status?.status === "failed" || status?.status === "passed";
+                if (status?.hasApiKey === true || isTerminal) {
                     await fetchExchangeData(found);
-                } else if ((found.status?.currentStep ?? 1) === 1) {
+                } else if ((status?.currentStep ?? 1) === 1) {
                     setShowApiKeyModal(true);
                 }
             } catch (requestError: unknown) {
@@ -262,18 +444,26 @@ export default function ClientChallengePage() {
         const executions = readList(exchangeData, "tradeHistory");
         const activeOrders = readList(exchangeData, "activeOrders");
         const history = closed.length ? closed : executions;
+        const metrics = balanceHistory?.metrics ?? null;
+        const hasExchangeMetrics = closed.length > 0 || history.length > 0;
 
         const wins = closed.reduce(
             (count, item) => count + (Number(item.closedPnl) > 0 ? 1 : 0),
             0,
         );
-        const winRate = closed.length > 0 ? (wins / closed.length) * 100 : 0;
+        const winRate =
+            closed.length > 0
+                ? (wins / closed.length) * 100
+                : metrics?.winRate ?? 0;
 
-        const realizedPnl = history.reduce(
+        const computedPnl = history.reduce(
             (sum, item) =>
                 sum + (numberValue(item.closedPnl) ?? numberValue(item.execPnl) ?? 0),
             0,
         );
+        const realizedPnl = hasExchangeMetrics
+            ? computedPnl
+            : metrics?.realizedPnl ?? 0;
 
         const unrealizedPnl =
             numberValue((coins[0] as ExchangeRecord | undefined)?.unrealisedPnl) ??
@@ -293,26 +483,37 @@ export default function ClientChallengePage() {
         }, 0)
 
 
-        const profitFactor = grossLoss == 0 ? "∞" : (grossProfit / grossLoss).toFixed(2);
+        const profitFactor =
+            closed.length > 0
+                ? grossLoss == 0
+                    ? "∞"
+                    : (grossProfit / grossLoss).toFixed(2)
+                : metrics?.profitFactor ??
+                    (grossLoss == 0 ? "∞" : (grossProfit / grossLoss).toFixed(2));
+
+        const tradeCount =
+            closed.length > 0
+                ? closed.length
+                : balanceHistory?.tradeCount ?? 0;
 
         const color = isProfit ? "#22c55e" : "#ef4444";
-        const chart = history
-            .map((item, index) => {
-                const timestamp =
-                    numberValue(item.updatedTime) ??
-                    numberValue(item.execTime) ??
-                    numberValue(item.createdTime);
-                const pnl =
-                    numberValue(item.closedPnl) ?? numberValue(item.execPnl) ?? 0;
-                return { timestamp: timestamp ?? index, pnl };
-            })
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .reduce<ChartPoint[]>((points, item, index, items) => {
-                const startingBalance = (equity ?? 0) - items.reduce((sum, trade) => sum + trade.pnl, 0);
-                const balance = startingBalance + items.slice(0, index + 1).reduce((sum, trade) => sum + trade.pnl, 0);
-                const date = item.timestamp;
-                return [...points, { date, balance }];
-            }, []);
+
+       
+        const mainLevel =
+            numberValue(myChallenge?.challenge?.value) ??
+            balanceHistory?.startingBalance ??
+            null;
+
+        const serverPoints = balanceHistory?.points ?? [];
+        const chart: ChartPoint[] =
+            serverPoints.length > 0
+                ? serverPoints
+                : buildLocalChart(history, equity, mainLevel);
+        const chartStart =
+            serverPoints.length > 0
+                ? balanceHistory?.startingBalance ?? mainLevel
+                : mainLevel ?? (chart.length > 0 ? chart[0].balance : null);
+
         return {
             equity,
             available,
@@ -320,13 +521,15 @@ export default function ClientChallengePage() {
             winRate,
             activeOrders: activeOrders.length,
             chart,
+            chartStart,
             color,
             targetValue,
             closed,
+            tradeCount,
             unrealizedPnl,
             profitFactor
         };
-    }, [exchangeData]);
+    }, [exchangeData, balanceHistory, myChallenge]);
 
     const isInProfit =
         account.equity !== null &&
@@ -338,18 +541,14 @@ export default function ClientChallengePage() {
     const totalSteps =
         myChallenge?.status?.steps ?? challenge?.steps ?? 1;
 
-    // Single source of truth: one phase drives banners, metrics, timeline,
-    // modal, polling and certificate. Certificate requires full completion
-    // (status + flag + passedAt + pointer + final-step keys); anything else
-    // mid-challenge renders the celebration + Continue flow instead.
+  
     const phase = phaseOf(myChallenge);
     const isFailed = phase === "failed";
     const isAllPassed = phase === "fully-passed";
     const isReadOnlyPast = isFailed || isAllPassed;
     const hasPassedPreviousStep = phase === "stage-passed-awaiting-keys";
     const showLive = phase === "live";
-    // partially_passed + keys submitted = current stage running (never the
-    // certificate — that stays gated on isAllPassed / "fully-passed").
+  
     const isPartiallyRunning = isPartiallyPassed(myChallenge) && showLive;
 
     const startingBalance = challenge?.value ?? 0;
@@ -369,6 +568,69 @@ export default function ClientChallengePage() {
                 ),
             );
     const hasLiveData = showLive && account.equity !== null;
+    const hasHistoryData = (balanceHistory?.tradeCount ?? 0) > 0;
+
+    const lastChartPoint =
+        account.chart.length > 0
+            ? account.chart[account.chart.length - 1]
+            : null;
+    const chartCurrent = account.equity ?? lastChartPoint?.balance ?? null;
+    const chartDeviation =
+        account.chartStart !== null && chartCurrent !== null
+            ? chartCurrent - account.chartStart
+            : null;
+    const chartDeviationPercent =
+        chartDeviation !== null && account.chartStart
+            ? (chartDeviation / account.chartStart) * 100
+            : null;
+
+    const belowMainLevel =
+        account.chartStart !== null &&
+        chartCurrent !== null &&
+        chartCurrent < account.chartStart;
+    const balanceValueClass =
+        account.chartStart === null || chartCurrent === null
+            ? ""
+            : belowMainLevel
+                ? "text-red-600 dark:text-[#ef4444]"
+                : "text-green-600 dark:text-[#22c55e]";
+
+  
+    const xTicks = timeTicksFor(account.chart);
+    let curveMin = Infinity;
+    let curveMax = -Infinity;
+    for (const point of account.chart) {
+        if (point.balance < curveMin) curveMin = point.balance;
+        if (point.balance > curveMax) curveMax = point.balance;
+    }
+    const [yLower] =
+        account.chart.length > 0
+            ? yDomainFor(curveMin, curveMax, account.chartStart)
+            : [0];
+    const level = account.chartStart;
+    
+    const strokeSplit =
+        level === null
+            ? 1
+            : curveMax > curveMin
+              ? Math.min(
+                    1,
+                    Math.max(0, (curveMax - level) / (curveMax - curveMin)),
+                )
+              : curveMax < level
+                ? 0
+                : 1;
+    const fillSplit =
+        level === null
+            ? 1
+            : curveMax > yLower
+              ? Math.min(
+                    1,
+                    Math.max(0, (curveMax - level) / (curveMax - yLower)),
+                )
+              : curveMax < level
+                ? 0
+                : 1;
 
     const challengeValueForTarget =
         myChallenge?.status?.value ?? challenge?.value ?? 0;
@@ -545,6 +807,7 @@ export default function ClientChallengePage() {
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <MetricCard
                         label="Current balance"
+                        valueClassName={balanceValueClass}
                         value={
                             hasPassedPreviousStep
                                 ? currency(targetBalance)
@@ -571,49 +834,62 @@ export default function ClientChallengePage() {
                         tone="default"
                     />
                     <MetricCard
-                        label="Realized P&L"
+                        label={showLive ? "Unrealized P&L" : "Realized P&L"}
                         value={
-                            hasPassedPreviousStep
-                                ? currency(targetProfitAmount)
-                                : hasLiveData
+                            showLive
+                                ? hasLiveData
+                                    ? currency(account.unrealizedPnl)
+                                    : "Connect exchange"
+                                : hasPassedPreviousStep ||
+                                    isReadOnlyPast ||
+                                    hasLiveData ||
+                                    hasHistoryData
                                   ? currency(account.realizedPnl)
                                   : "Connect exchange"
                         }
                         detail={
-                            hasPassedPreviousStep
-                                ? `Stage ${currentStep - 1} target profit`
-                                : hasLiveData
-                                  ? "From closed trades"
-                                  : "No live data yet"
+                            showLive
+                                ? hasLiveData
+                                    ? "Floating on open trades"
+                                    : "No live data yet"
+                                : hasPassedPreviousStep
+                                  ? `Stage ${currentStep - 1} realized profit`
+                                  : hasLiveData || hasHistoryData
+                                    ? "From closed trades"
+                                    : "No live data yet"
                         }
                         icon={
-                            hasPassedPreviousStep
+                            (showLive
+                                ? account.unrealizedPnl
+                                : account.realizedPnl) >= 0
                                 ? TrendingUp
-                                : account.unrealizedPnl >= 0
-                                  ? TrendingUp
-                                  : TrendingDown
+                                : TrendingDown
                         }
                         tone={
-                            hasPassedPreviousStep
+                            (showLive
+                                ? account.unrealizedPnl
+                                : account.realizedPnl) >= 0
                                 ? "positive"
-                                : account.unrealizedPnl >= 0
-                                  ? "positive"
-                                  : "warning"
+                                : "warning"
                         }
                     />
                     <MetricCard
                         label="Win rate"
                         value={`${account.winRate.toFixed(2)}%`}
-                        detail={`based on last ${account.closed.length} closed positions`}
+                        detail={`based on last ${account.tradeCount} closed positions`}
                         icon={Target}
                         tone="positive"
                     />
                     <MetricCard
                         label="Profit Factor"
-                        value={hasLiveData ? String(account.profitFactor) : "—"}
+                        value={
+                            hasLiveData || hasHistoryData
+                                ? String(account.profitFactor)
+                                : "—"
+                        }
                         detail={
-                            hasLiveData
-                                ? `based on last ${account.closed.length} closed positions`
+                            hasLiveData || hasHistoryData
+                                ? `based on last ${account.tradeCount} closed positions`
                                 : "Connect exchange to view"
                         }
                         icon={Landmark}
@@ -629,15 +905,46 @@ export default function ClientChallengePage() {
                                     Balance history
                                 </CardTitle>
                                 <p className="mt-1 text-sm text-gray-500 dark:text-[#82717b]">
-                                    Equity based on your latest closed trades.
+                                    {chartDeviation !== null ? (
+                                        <>
+                                            Deviation from start:{" "}
+                                            <span
+                                                className={`font-bold ${chartDeviation >= 0
+                                                    ? "text-green-500 dark:text-[#22c55e]"
+                                                    : "text-red-500 dark:text-[#ef4444]"
+                                                    }`}
+                                            >
+                                                {chartDeviation >= 0 ? "+" : ""}
+                                                {currency(chartDeviation)}
+                                                {chartDeviationPercent !== null
+                                                    ? ` (${chartDeviationPercent >= 0 ? "+" : ""}${chartDeviationPercent.toFixed(2)}%)`
+                                                    : ""}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        "Equity based on your latest closed trades."
+                                    )}
                                 </p>
                             </div>
                             <div className="text-right">
-                                <p className="text-sm font-bold">
-                                    {hasLiveData ? currency(account.equity) : "Waiting for data"}
+                                <p className={`text-sm font-bold ${balanceValueClass}`}>
+                                    {hasLiveData
+                                        ? currency(account.equity)
+                                        : hasHistoryData
+                                              ? currency(
+                                                    balanceHistory?.metrics
+                                                        ?.finalBalance ??
+                                                        lastChartPoint?.balance ??
+                                                        null,
+                                                )
+                                              : "Waiting for data"}
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-[#82717b]">
-                                    Current balance
+                                    {hasLiveData
+                                        ? "Current balance"
+                                        : hasHistoryData
+                                            ? "Final balance"
+                                            : "Current balance"}
                                 </p>
                             </div>
                         </CardHeader>
@@ -647,25 +954,94 @@ export default function ClientChallengePage() {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={account.chart}>
                                             <defs>
-                                                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor={account.color} stopOpacity={0.8} />
-                                                    <stop offset="95%" stopColor={account.color} stopOpacity={0} />
+                                                <linearGradient
+                                                    id="strokeSplit"
+                                                    x1="0"
+                                                    y1="0"
+                                                    x2="0"
+                                                    y2="1"
+                                                >
+                                                    <stop offset="0" stopColor="#22c55e" />
+                                                    <stop offset={strokeSplit} stopColor="#22c55e" />
+                                                    <stop offset={strokeSplit} stopColor="#ef4444" />
+                                                    <stop offset="1" stopColor="#ef4444" />
+                                                </linearGradient>
+                                                <linearGradient
+                                                    id="fillSplit"
+                                                    x1="0"
+                                                    y1="0"
+                                                    x2="0"
+                                                    y2="1"
+                                                >
+                                                    <stop offset="0" stopColor="#22c55e" stopOpacity={0.75} />
+                                                    <stop offset={fillSplit} stopColor="#22c55e" stopOpacity={0.75} />
+                                                    <stop offset={fillSplit} stopColor="#ef4444" stopOpacity={0.75} />
+                                                    <stop offset="1" stopColor="#ef4444" stopOpacity={0} />
                                                 </linearGradient>
                                             </defs>
 
-                                            <CartesianGrid strokeDasharray="3 3" />
+
+                                            {account.chartStart !== null && (
+                                                <ReferenceLine
+                                                    y={account.chartStart}
+                                                    stroke="#71717a"
+                                                    strokeDasharray="4 4"
+                                                    label={{
+                                                        value: `Start ${currency(account.chartStart)}`,
+                                                        position:
+                                                            "insideTopRight",
+                                                        fill: "#71717a",
+                                                        fontSize: 11,
+                                                    }}
+                                                />
+                                            )}
 
                                             <XAxis
                                                 dataKey="date"
-                                                tickFormatter={(date) =>
-                                                    new Date(date).toLocaleDateString("en-IN", {
-                                                        day: "numeric",
-                                                        month: "short",
-                                                    })
-                                                }
+                                                type="number"
+                                                scale="time"
+                                                domain={["dataMin", "dataMax"]}
+                                                ticks={xTicks?.ticks}
+                                                tick={{ fontSize: 11 }}
+                                                tickMargin={8}
+                                                tickFormatter={(date) => {
+                                                    const step =
+                                                        xTicks?.step ?? 0;
+                                                    const d = new Date(date);
+                                                    const day =
+                                                        d.toLocaleDateString(
+                                                            "en-IN",
+                                                            {
+                                                                day: "numeric",
+                                                                month: "short",
+                                                            },
+                                                        );
+                                                    // Sub-day steps need the
+                                                    // time or every tick would
+                                                    // read the same date.
+                                                    return step > 0 &&
+                                                        step < 86_400_000
+                                                        ? `${day} ${d.toLocaleTimeString("en-IN", {
+                                                              hour: "2-digit",
+                                                              minute: "2-digit",
+                                                              hour12: false,
+                                                          })}`
+                                                        : day;
+                                                }}
                                             />
 
-                                            <YAxis />
+                                            <YAxis
+                                                tickFormatter={(value) =>
+                                                    compactCurrency(value)
+                                                }
+                                                domain={([dataMin, dataMax]) =>
+                                                    yDomainFor(
+                                                        dataMin,
+                                                        dataMax,
+                                                        account.chartStart,
+                                                    )
+                                                }
+                                            />
 
                                             <Tooltip
 
@@ -684,7 +1060,9 @@ export default function ClientChallengePage() {
                                                     marginBottom: 6,
                                                 }}
                                                 itemStyle={{
-                                                    color: `${account.color}`,
+                                                    color: belowMainLevel
+                                                        ? "#ef4444"
+                                                        : "#22c55e",
                                                     fontSize: 14,
                                                     fontWeight: 600,
                                                 }}
@@ -700,18 +1078,40 @@ export default function ClientChallengePage() {
                                                     })
                                                 }
 
-                                                formatter={(balance) =>
-                                                    `$${balance?.toLocaleString()}`
-                                                }
+                                                formatter={(value) => {
+                                                    const balance = Number(value);
+                                                    const delta =
+                                                        account.chartStart !== null
+                                                            ? balance -
+                                                              account.chartStart
+                                                            : null;
+                                                    const pct =
+                                                        delta !== null &&
+                                                        account.chartStart
+                                                            ? (delta /
+                                                                  account.chartStart) *
+                                                              100
+                                                            : null;
+                                                    return [
+                                                        `${currency(balance)}${
+                                                            delta !== null
+                                                                ? ` (${delta >= 0 ? "+" : ""}${currency(delta)}${pct !== null ? `, ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` : ""})`
+                                                                : ""
+                                                        }`,
+                                                        "Balance",
+                                                    ];
+                                                }}
                                             />
 
 
                                             <Area
                                                 type="monotone"
                                                 dataKey="balance"
-                                                stroke={account.color}
+                                                stroke="url(#strokeSplit)"
                                                 strokeWidth={2}
-                                                fill="url(#colorValue)"
+                                                fill="url(#fillSplit)"
+                                                baseValue={yLower}
+                                                isAnimationActive={false}
                                             />
                                         </AreaChart>
                                     </ResponsiveContainer>

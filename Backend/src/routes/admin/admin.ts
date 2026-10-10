@@ -299,7 +299,7 @@ adminRouter.post("/auth/signin", async (req, res) => {
 adminRouter.post("/create/challenge", adminMiddleware, async (req, res) => {
   const data = req.body;
 
-  const { title, description, price, value, steps, drawdown, target } = data;
+  const { title, description, price, value, steps, drawdown, target, dailyDrawdown  } = data;
 
   if (!title || !description || !price) {
     return res.status(400).json({
@@ -321,6 +321,7 @@ adminRouter.post("/create/challenge", adminMiddleware, async (req, res) => {
         steps: steps ?? 1,
         drawdown: drawdown ?? 10,
         target: target ?? 10,
+        daily_drawdown: dailyDrawdown?? drawdown/2,
       })
       .returning();
 

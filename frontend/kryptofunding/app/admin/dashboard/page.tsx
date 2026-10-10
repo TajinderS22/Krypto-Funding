@@ -40,6 +40,7 @@ interface Challenge {
   creator_id: number;
   steps: number | null;
   drawdown: number | null;
+  daily_drawdown: number | null;
   target: number | null;
   created_at: string;
   updated_at: string;
@@ -64,6 +65,7 @@ export default function AdminDashboard() {
     value: "",
     steps: "1",
     drawdown: "10",
+    dailyDrawdown: "5",
     target: "10",
   });
 
@@ -98,6 +100,7 @@ export default function AdminDashboard() {
       value: "0",
       steps: "1",
       drawdown: "10",
+      dailyDrawdown: "5",
       target: "10",
     });
   };
@@ -116,6 +119,18 @@ export default function AdminDashboard() {
     }
   };
 
+  // dailyDrawdown must reach the create endpoint as a number; an empty/invalid
+  // string would be sent as "" and blow up the integer column. undefined keys
+  // are dropped by JSON.stringify, so the backend falls back to drawdown / 2.
+  const buildPayload = () => ({
+    ...formData,
+    dailyDrawdown:
+      formData.dailyDrawdown.trim() !== "" &&
+      Number.isFinite(Number(formData.dailyDrawdown))
+        ? Number(formData.dailyDrawdown)
+        : undefined,
+  });
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.price) {
@@ -123,7 +138,7 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      await api.post("/admin/create/challenge", formData);
+      await api.post("/admin/create/challenge", buildPayload());
       toast.success("Challenge created successfully!");
       setShowCreateModal(false);
       resetForm();
@@ -144,7 +159,9 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!editingChallenge) return;
     try {
-      await api.put(`/admin/challenge/${editingChallenge.id}`, formData);
+      // NOTE: the PUT endpoint does not consume dailyDrawdown yet (backend P1
+      // gap) — sending it is forward-compatible and otherwise ignored.
+      await api.put(`/admin/challenge/${editingChallenge.id}`, buildPayload());
       toast.success("Challenge updated!");
       setShowEditModal(false);
       setEditingChallenge(null);
@@ -189,6 +206,9 @@ export default function AdminDashboard() {
       value: formData.value,
       steps: String(challenge.steps ?? 1),
       drawdown: String(challenge.drawdown ?? 10),
+      dailyDrawdown: String(
+        challenge.daily_drawdown ?? (challenge.drawdown ?? 10) / 2,
+      ),
       target: String(challenge.target ?? 10),
     });
     setShowEditModal(true);
@@ -342,6 +362,9 @@ export default function AdminDashboard() {
                           </span>
                           <span className="flex items-center gap-1">
                             DD: {challenge.drawdown ?? "-"}%
+                          </span>
+                          <span className="flex items-center gap-1">
+                            Daily: {challenge.daily_drawdown ?? "-"}%
                           </span>
                           <span className="flex items-center gap-1">
                             Tgt: {challenge.target ?? "-"}%
@@ -503,6 +526,18 @@ export default function AdminDashboard() {
               </select>,
             )}
             {formField(
+              "Daily Drawdown (%)",
+              <Input
+                type="number"
+                value={formData.dailyDrawdown}
+                onChange={(e) =>
+                  setFormData({ ...formData, dailyDrawdown: e.target.value })
+                }
+                className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter focus-visible:border-purple-500 focus-visible:ring-0 dark:border-[#3b353c] dark:focus-visible:border-[#a855f7]"
+                placeholder="5"
+              />,
+            )}
+            {formField(
               "Target (%)",
               <Input
                 type="number"
@@ -629,6 +664,18 @@ export default function AdminDashboard() {
                 <option value="10">10%</option>
                 <option value="12">12%</option>
               </select>,
+            )}
+            {formField(
+              "Daily Drawdown (%)",
+              <Input
+                type="number"
+                value={formData.dailyDrawdown}
+                onChange={(e) =>
+                  setFormData({ ...formData, dailyDrawdown: e.target.value })
+                }
+                className="h-auto rounded-md border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-xl font-black tracking-tighter focus-visible:border-purple-500 focus-visible:ring-0 dark:border-[#3b353c] dark:focus-visible:border-[#a855f7]"
+                placeholder="5"
+              />,
             )}
             {formField(
               "Target (%)",

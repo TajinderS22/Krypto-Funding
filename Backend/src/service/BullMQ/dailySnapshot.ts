@@ -71,83 +71,138 @@ const readList = (data: any | null, key: string): any[] => {
   return Array.isArray(list) ? (list as any[]) : [];
 };
 
-new Worker("daily-snapshot", async (job) => {
-  const { account } = job.data;
+new Worker(
+  "daily-snapshot",
+  async (job) => {
+    const { account } = job.data;
 
-  const client = getClient(account);
+    const client = getClient(account);
 
-  const bal = await client?.getWalletBalance({
-    accountType: "UNIFIED",
-    coin: "USDT",
-  });
+    const bal = await client?.getWalletBalance({
+      accountType: "UNIFIED",
+      coin: "USDT",
+    });
 
-  const accountBalance = bal?.result.list[0]?.totalMarginBalance;
-  const drawdownAmount =
-    (account.challenges?.value * account.challenges?.drawdown) / 100;
-  const accountVlaue = account.challenges?.value;
-  const targetAmount =
-    (account.challenges?.value * account.challenges.target) / 100;
+    const accountBalance = bal?.result.list[0]?.totalMarginBalance;
+    const drawdownAmount =
+      (account.challenges?.value * account.challenges?.drawdown) / 100;
+    const accountVlaue = account.challenges?.value;
+    const targetAmount =
+      (account.challenges?.value * account.challenges.target) / 100;
 
-  const minBalance = accountVlaue - drawdownAmount;
-  const targetBalance = accountVlaue + targetAmount;
+    const minBalance = accountVlaue - drawdownAmount;
+    const targetBalance = accountVlaue + targetAmount;
 
-  const closedPositions = await client?.getClosedPnL({
-    category: "linear",
-  });
+    const closedPositions = await client?.getClosedPnL({
+      category: "linear",
+    });
 
-  const closed = readList(closedPositions, "closedPositions");
-  const wins = closed.reduce(
-    (count, item) => count + (Number(item.closedPnl) > 0 ? 1 : 0),
-    0,
-  );
-  const winRate = closed.length > 0 ? (wins / closed.length) * 100 : 0;
+    const closed = readList(closedPositions, "closedPositions");
+    const wins = closed.reduce(
+      (count, item) => count + (Number(item.closedPnl) > 0 ? 1 : 0),
+      0,
+    );
+    const winRate = closed.length > 0 ? (wins / closed.length) * 100 : 0;
 
-  const numberValue = (value: unknown): number | null => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+    const numberValue = (value: unknown): number | null => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
 
-  const grossLoss = closed.reduce((sum, item) => {
-    const pnl = numberValue(item.closedPnl) ?? 0;
-    return sum + (pnl < 0 ? Math.abs(pnl) : 0);
-  }, 0);
+    const grossLoss = closed.reduce((sum, item) => {
+      const pnl = numberValue(item.closedPnl) ?? 0;
+      return sum + (pnl < 0 ? Math.abs(pnl) : 0);
+    }, 0);
 
-  const grossProfit = closed.reduce((sum, item) => {
-    const pnl = numberValue(item.closedPnl) ?? 0;
-    return sum + (pnl > 0 ? pnl : 0);
-  }, 0);
+    const grossProfit = closed.reduce((sum, item) => {
+      const pnl = numberValue(item.closedPnl) ?? 0;
+      return sum + (pnl > 0 ? pnl : 0);
+    }, 0);
 
-  const profitFactor =
-    grossLoss == 0 ? "∞" : (grossProfit / grossLoss).toFixed(2);
+    const profitFactor =
+      grossLoss == 0 ? "∞" : (grossProfit / grossLoss).toFixed(2);
 
-  try {
+    try {
+      await triggerDailySnapshot(
+        account,
+        accountBalance,
+        String(winRate),
+        profitFactor,
+        closed,
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  },
+  {
+    connection: connection,
+    concurrency: 1,
+  },
+);
 
-    const exist = await db.select()
-                    .from(exchangeData)
-                    .where(and(
-                        eq(exchangeData.user_id,account.userId),
-                        eq(exchangeData.purchase_id,account.purchaseId),
-                        eq(exchangeData.current_step,account.currentStep)
-                    ))
-    const res = await db
+export const triggerDailySnapshot = async (
+  account: any,
+  accountBalance: any,
+  winRate: string,
+  profitFactor: string,
+  closed: any[],
+) => {
+  const exist = await db
+    .select()
+    .from(exchangeData)
+    .where(
+      and(
+        eq(exchangeData.user_id, account.userId),
+        eq(exchangeData.purchase_id, account.purchaseId),
+        eq(exchangeData.current_step, account.currentStep),
+      ),
+    );
+
+  const closedTrades = Array.isArray(closed) ? closed : [];
+
+  if (exist.length === 0) {
+    await db.insert(exchangeData).values({
+      user_id: account.userId,
+      purchase_id: account.purchaseId,
+      challenge_id: account.challengeStatus.challenge_id,
+      current_step: account.currentStep,
+    });
+  } else {
+    await db
       .update(dailySnapshot)
       .set({
         account_balance: accountBalance,
         win_rate: String(winRate),
         profit_factor: String(profitFactor),
-        closed_trades: closed,
+        closed_trades: closedTrades as any,
         updated_at: sql`now()`,
       })
+      .where(
+        and(
+          eq(dailySnapshot.user_id, account.userId),
+          eq(dailySnapshot.purchase_id, account.purchaseId),
+          eq(dailySnapshot.challenge_status_id, account.challengeStatus.id),
+          eq(dailySnapshot.current_step, account.currentStep),
+        ),
+      )
       .returning();
-
-    const snapShot = res[0];
-
-    await redis.set(
-      `daily-snapshot-${account.userId}-${account.purchaseId}`,
-      JSON.stringify(snapShot),
-      { EX: 86600 },
-    );
-  } catch (error) {
-    console.log(error);
   }
-});
+
+  const snapShot = {
+    user_id: account.userId,
+    purchase_id: account.purchaseId,
+    challenge_id: account.challengeStatus.challenge_id,
+    current_step: account.currentStep,
+    account_balance: accountBalance,
+    win_rate: String(winRate),
+    profit_factor: String(profitFactor),
+    closed_trades: closedTrades as any,
+    updated_at: sql`now()`,
+  };
+
+  await redis.set(
+    `daily-snapshot-${account.userId}-${account.purchaseId}`,
+    JSON.stringify(snapShot),
+    { EX: 86600 },
+  );
+};

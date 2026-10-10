@@ -6,9 +6,10 @@ import apiRouter from "./routes/api.js";
 import "./service/cron/syncUserBybitClients.js";
 import { syncUsers } from "./service/cron/syncUserBybitClients.js";
 import "./service/bybit/updateUserExchangeData.js";
-import "./service/BullMQ/balanceCheckScheduler.js";
+import "./service/BullMQ/balanceActionScheduler.js";
 import "./service/BullMQ/balanceActionWorker.js"
 import "./service/BullMQ/emailService.js"
+import "./service/BullMQ/dailySnapshot.js"
 
 dotenv.config({
   path: "../.env",
@@ -22,7 +23,7 @@ app.use(
     origin: process.env.FRONTEND_URL || "http://localhost:3000",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization","idempotencyKey","idempotency-key"],
   }),
 );
 app.use(cookieParser());

@@ -294,20 +294,22 @@ userRouter.get(
           status: {
             id: challengeStatus.id,
             status: challengeStatus.status,
-            fullyPassed: challengeStatus.fully_passed,
-            passedStep1: challengeStatus.passed_step_1,
-            passedStep2: challengeStatus.passed_step_2,
-            failed: challengeStatus.failed,
             currentStep: challengeStatus.current_step,
             value: challengeStatus.value,
             currentBalance: challengeStatus.current_balance,
             steps: challengeStatus.steps,
             hasApiKey: challengeStatus.has_api_key,
+            fullyPassed: challengeStatus.fully_passed,
             fullyPassedAt: challengeStatus.fully_passed_at,
+            passedStep1: challengeStatus.passed_step_1,
+            passedStep2: challengeStatus.passed_step_2,
             passedStep1At: challengeStatus.passed_step_1_at,
             passedStep2At: challengeStatus.passed_step_2_at,
+            failed: challengeStatus.failed,
             failedAt: challengeStatus.failed_at,
             updated_at: challengeStatus.updated_at,
+            failedReasonCode:challengeStatus.failed_reason_code,
+            failedReason:challengeStatus.failed_reason
           },
           challenge: {
             id: challenges.id,
@@ -321,6 +323,7 @@ userRouter.get(
             target: challenges.target,
             created_at: challenges.created_at,
             updated_at: challenges.updated_at,
+            dailyDrawdown:challenges.daily_drawdown,
           },
         })
         .from(purchases)
@@ -404,6 +407,10 @@ userRouter.post("/challenges/buy", userMiddleware, async (req, res) => {
       return res.status(404).json({ message: "Challenge not found" });
     }
 
+
+    // payment  and discount logic 
+
+
     const [purchase] = await db
       .insert(purchases)
       .values({
@@ -446,7 +453,7 @@ userRouter.post("/api-key", userMiddleware, async (req, res) => {
     apiSecret,
   });
 
-  if (!apiKey || !apiSecret || !purchaseId || !challengeId) {
+  if (!apiKey || !apiSecret || !purchaseId || !challengeId ) {
     res.status(422).json({
       message: "Please send all fields correctly",
     });

@@ -53,6 +53,8 @@ export default function ApiKeyModal({
         setError(null);
 
         try {
+            // NOTE: no `currentStep` in the body — the server ignores it and
+            // reads the pointer from challenge_status.current_step (user.ts:498).
             await api.post(`/user/api-key`, {
                 apiKey: apiKey.trim(),
                 apiSecret: apiSecret.trim(),

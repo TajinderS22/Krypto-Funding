@@ -1,17 +1,20 @@
 import axios from "axios";
 
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005/api/v1";
+
 const api = axios.create({
-  baseURL: "http://localhost:3005/api/v1",
+  baseURL: apiBaseUrl,
   withCredentials: true,
 });
 
 let isRefreshing = false;
 let failedQueue: Array<{
-  resolve: (value: any) => void;
-  reject: (reason?: any) => void;
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
 }> = [];
 
-const processQueue = (error: any) => {
+const processQueue = (error: unknown) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
@@ -50,7 +53,7 @@ api.interceptors.response.use(
 
     try {
       await axios.post(
-        "http://localhost:3005/api/v1/user/auth/refresh",
+        `${apiBaseUrl}/user/auth/refresh`,
         {},
         { withCredentials: true },
       );
@@ -59,16 +62,14 @@ api.interceptors.response.use(
     } catch {
       try {
         await axios.post(
-          "http://localhost:3005/api/v1/admin/auth/refresh",
+          `${apiBaseUrl}/admin/auth/refresh`,
           {},
           { withCredentials: true },
         );
         processQueue(null);
         return api(originalRequest);
       } catch {
-        await axios
-          .post("/auth/logout")
-          .catch(() => {});
+        await axios.post("/auth/logout").catch(() => {});
         processQueue(error);
         return Promise.reject(error);
       }

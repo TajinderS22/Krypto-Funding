@@ -18,7 +18,10 @@ const money0 = (v: number | null | undefined) =>
 
 export function FailReasonCard({ item }: { item: MyChallenge }) {
   const detail = getStaticPastDetail(item);
-  const copy = STATIC_FAIL_COPY[detail?.failedReasonCode ?? "DRAWDOWN_BREACH"];
+  // Unknown/legacy codes must not crash the card — fall back to the default copy.
+  const copy =
+    STATIC_FAIL_COPY[detail?.failedReasonCode ?? "DRAWDOWN_BREACH"] ??
+    STATIC_FAIL_COPY.DRAWDOWN_BREACH;
   return (
     <Card className="rounded-md border-red-500/25 bg-red-500/5 py-0 dark:border-red-500/25">
       <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
@@ -38,7 +41,7 @@ export function FailReasonCard({ item }: { item: MyChallenge }) {
               {detail?.decidedAt
                 ? ` · Ended ${new Date(detail.decidedAt).toLocaleDateString()}`
                 : ""}
-              {" · TODO(past-fetch): wire real breach reason + timestamp."}
+              {" · Reason + timestamp from API; TODO(past-fetch): real certificate detail."}
             </p>
           </div>
         </div>

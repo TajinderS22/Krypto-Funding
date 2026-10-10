@@ -33,8 +33,8 @@ export const isPartiallyPassed = (
 /**
  * Full-completion gate. ALL conditions required:
  * - status string is terminal "passed"
- * - passed mirror flag true
- * - passedAt timestamp present
+ * - fullyPassed mirror flag true
+ * - fullyPassedAt timestamp present
  * - pointer reached total (currentStep >= totalSteps)
  * - final-step keys were submitted (hasApiKey === true)
  *
@@ -49,8 +49,8 @@ export function isFullyPassed(
 ): boolean {
   const s = item?.status;
   if (!s || s.status !== "passed") return false;
-  if (s.passed !== true) return false;
-  if (!s.passedAt) return false;
+  if (s.fullyPassed !== true) return false;
+  if (!s.fullyPassedAt) return false;
   if (!hasKeys(item)) return false;
   return currentStepOf(item) >= totalStepsOf(item);
 }

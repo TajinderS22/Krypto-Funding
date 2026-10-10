@@ -12,6 +12,7 @@ interface DBChallenge {
   price: number | null;
   steps: number | null;
   drawdown: number | null;
+  daily_drawdown: number | null;
   target: number | null;
 }
 
@@ -38,6 +39,7 @@ const UniquePlanSelector = () => {
             price: Number(c.price) || 0,
             steps: c.steps ?? 1,
             drawdown: c.drawdown ?? null,
+            daily_drawdown: c.daily_drawdown ?? null,
             target: c.target ?? null,
           }),
         );
@@ -64,7 +66,13 @@ const UniquePlanSelector = () => {
 
   const getSpecs = () => {
     const match = getChallengeForConfig(size, isTwoStep ? 2 : 1, maxDrawdown);
-    const dailyDrawdown = maxDrawdown / 2;
+    // Prefer the API's daily_drawdown; fall back to the old max/2 heuristic
+    // only when the row has no value (legacy challenges).
+    const apiDaily =
+      match?.daily_drawdown != null && Number.isFinite(Number(match.daily_drawdown))
+        ? Number(match.daily_drawdown)
+        : null;
+    const dailyDrawdown = apiDaily ?? maxDrawdown / 2;
 
     return {
       target: `${maxDrawdown}%`,
