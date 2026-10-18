@@ -33,6 +33,18 @@ export default function FAQPage() {
       q: "How do I connect my Bybit API for a demo account?",
       a: "Connecting your Bybit API for a demo account is simple. You can find a complete step-by-step guide on our Bybit API Connection Guide.",
     },
+    {
+      q: "Is there a minimum trade holding time?",
+      a: "Yes. All trades must be held for a minimum of 20 seconds before being closed. Positions closed under 20 seconds (hyper-scalping, tick manipulation, or latency exploitation) violate our risk guidelines.",
+    },
+    {
+      q: "Can I trade during high-impact news events?",
+      a: "Trading during high-impact macroeconomic news events (CPI, FOMC, etc.) is currently permitted, but remains subject to KryptoFunding platform policies. KryptoFunding reserves the right to restrict or prohibit news trading in future updates to safeguard simulated execution integrity.",
+    },
+    {
+      q: "Are trading bots and Expert Advisors (EAs) allowed?",
+      a: "Automated trading bots, scripts, and EAs are subject to platform terms. KryptoFunding reserves the right to disable or restrict automated strategies at any time to prioritize manual risk management and trader discipline.",
+    },
   ];
 
   return (

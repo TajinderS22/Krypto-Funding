@@ -3,24 +3,23 @@ import { isFullyPassed } from "./challengePhase";
 import type { MyChallenge, PastChallengeDetail } from "./types";
 
 export const STATIC_FAIL_COPY: Record<string, { title: string; body: string }> = {
-  DRAWDOWN_BREACH: {
+  MAX_DRAWDOWN_BREACH: {
     title: "Max drawdown breached",
     body: "Equity fell below the minimum allowed balance for this evaluation. Trade history is frozen at the last synced balance.",
   },
-  RULE_VIOLATION: {
-    title: "Rule violation",
-    body: "A trading rule was breached during the evaluation window. Details will appear here once the rules engine ships.",
+  DAILY_DRAWDOWN_BREACHED: {
+    title: "Daily Drawdown breached",
+    body: "Wallet Balance fell below the daily minimum balance. The daily balance snapshot is recorded at 12:00 GMT, or 17:30 IST. The minimum balance allowd for a single day is as per given rules or half of max drawdown in percentage terms.",
   },
-  INACTIVITY: {
-    title: "Evaluation expired",
-    body: "No trading activity was recorded before the evaluation window closed.",
+  MIN_HOLD_TIME: {
+    title: "Minimum hold time rule breached.",
+    body: "A trade must be held for at least 20 sec to count it a valid trade. Any trade closed within 20 sec of opening breaches this rule. ",
   },
 };
 
 export function getStaticPastDetail(item: MyChallenge): PastChallengeDetail | null {
   if (item.status?.status === "failed") {
-    // Prefer the API's failed_reason_code; legacy rows / missing codes fall
-    // back to DRAWDOWN_BREACH so a copy entry always exists.
+   
     const code = item.status?.failedReasonCode || "DRAWDOWN_BREACH";
     const copy = STATIC_FAIL_COPY[code] ?? STATIC_FAIL_COPY.DRAWDOWN_BREACH;
     return {

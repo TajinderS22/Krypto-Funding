@@ -8,25 +8,37 @@ const rules = [
     label: "Rule 01",
     accent: "text-amber-400 dark:text-[#fbbf24]",
     title: "Daily Drawdown",
-    body: "Your daily drawdown is calculated based on the initial balance of your account at 00:00 UTC. If your floating equity drops below this daily threshold (4% for 1-Step, 5% for 2-Step), your simulation is terminated.",
+    body: "Your daily drawdown is calculated based on the daily snapshot balance at 12:00 UTC. If your floating equity drops below this threshold, your evaluation is terminated.",
   },
   {
     label: "Rule 02",
     accent: "text-amber-400 dark:text-[#fbbf24]",
     title: "Overall Drawdown",
-    body: "Your overall drawdown is static, calculated from the initial starting balance of your account. You must not drop below this absolute limit at any point, including floating PnL.",
+    body: "Your overall drawdown is strictly static, calculated from the initial starting balance of your account. You must not drop below this absolute floor at any point, including floating PnL.",
   },
   {
     label: "Rule 03",
-    accent: "text-purple-500 dark:text-[#a855f7]",
-    title: "News Trading",
-    body: "Trading during high-impact macroeconomic news releases is permitted in our simulation environment to help you practice real-world volatility, though severe slippage may be simulated.",
+    accent: "text-amber-400 dark:text-[#fbbf24]",
+    title: "Min 20s Holding Time",
+    body: "All open trades must be held for a minimum of 20 seconds before closing. Hyper-scalping, tick scalping, or closing positions under 20 seconds is strictly prohibited.",
   },
   {
     label: "Rule 04",
     accent: "text-purple-500 dark:text-[#a855f7]",
+    title: "News Trading",
+    body: "Trading during high-impact macroeconomic releases is currently allowed, but remains subject to platform terms. KryptoFunding reserves the right to restrict or prohibit news trading in future updates to maintain market simulation integrity.",
+  },
+  {
+    label: "Rule 05",
+    accent: "text-purple-500 dark:text-[#a855f7]",
+    title: "Bots & Expert Advisors",
+    body: "Automated trading bots, scripts, and EAs are subject to platform terms. KryptoFunding reserves the right to disable or restrict automated trading at any time to foster disciplined manual execution.",
+  },
+  {
+    label: "Rule 06",
+    accent: "text-purple-500 dark:text-[#a855f7]",
     title: "Weekend Holding",
-    body: "You are free to hold trades over the weekend. However, be aware that crypto markets remain open, and forex/indices will simulate weekend gap risks.",
+    body: "You are free to hold trades over the weekend. Cryptocurrency markets operate 24/7 without closure.",
   },
 ];
 

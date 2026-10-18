@@ -50,15 +50,25 @@ export const challenges = pgTable("challenges", {
 
 export const challengeStatus = pgTable("challenge_status", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
+
+  // all FK
   user_id: integer()
     .notNull()
     .references(() => usersTable.id),
-  current_step: integer(),
-  steps: integer(),
   challenge_id: uuid()
     .notNull()
     .references(() => challenges.id),
-  status: varchar({ length: 50 }).notNull(),
+  purchase_id: integer()
+    .notNull()
+    .references(() => purchases.id),
+  certificate_id: uuid().references(() => passCertificate.id),
+  order_id: uuid().references(() => orders.id),
+  discount_tracker_id: uuid().references(() => discountTracker.id),
+
+  current_step: integer(),
+  steps: integer(),
+
+  status: varchar({ length: 50 }).notNull().default("active"),
   has_api_key: boolean().notNull().default(false),
 
   // action states
@@ -73,17 +83,10 @@ export const challengeStatus = pgTable("challenge_status", {
   passed_step_2_at: timestamp({ withTimezone: true }),
   failed_at: timestamp({ withTimezone: true }),
 
-  purchase_id: integer()
-    .notNull()
-    .references(() => purchases.id),
-  value: integer(),
+  value: integer().notNull(),
   current_balance: numeric({ precision: 20, scale: 8 }),
   failed_reason_code: varchar({ length: 50 }),
   failed_reason: varchar({ length: 255 }),
-  certificate_id: uuid().references(() => passCertificate.id),
-
-  order_id: uuid().references(() => orders.id),
-  discount_tracker_id: uuid().references(() => discountTracker.id),
 
   updated_at: timestamp({ withTimezone: true }).defaultNow(),
   created_at: timestamp({ withTimezone: true }).defaultNow(),
@@ -111,10 +114,10 @@ export const orders = pgTable("orders", {
   idempotency_key: uuid().unique(),
   discount_code: varchar({ length: 255 }),
   discount_tracker_id: uuid().references(() => discountTracker.id),
-  final_price: numeric({ precision: 10, scale: 2 }),
+  final_price: numeric({ precision: 10, scale: 2 }).notNull(),
   discount_applied: boolean(),
-  pg_order_id: varchar(),
-  pg_status : varchar(),
+  pg_order_id: varchar().unique().notNull(),
+  pg_status: varchar(),
   amount_due: numeric({ precision: 10, scale: 2 }),
   amount_paid: numeric({ precision: 10, scale: 2 }),
   attempts: integer(),
@@ -122,11 +125,10 @@ export const orders = pgTable("orders", {
   entity: varchar().default("order"),
   pg_payment_id: varchar(),
   pg_signature: varchar(),
-  discount:  numeric({ precision: 10, scale: 2 }),
+  discount: numeric({ precision: 10, scale: 2 }),
   discount_percentage: numeric({ precision: 10, scale: 2 }),
-  updated_at:timestamp({ withTimezone: true }).defaultNow(),
-  created_at:timestamp({ withTimezone: true }).defaultNow(),
-
+  updated_at: timestamp({ withTimezone: true }).defaultNow(),
+  created_at: timestamp({ withTimezone: true }).defaultNow(),
 });
 
 export const discountTracker = pgTable("discountTracker", {
@@ -135,7 +137,7 @@ export const discountTracker = pgTable("discountTracker", {
   challenge_id: uuid().references(() => challenges.id),
   idempotency_key: uuid().unique(),
   discount_code: varchar({ length: 255 }),
-  challenge_fee_final: numeric({ precision: 10, scale: 2 }) ,
+  challenge_fee_final: numeric({ precision: 10, scale: 2 }),
   platform_fee: numeric({ precision: 10, scale: 2 }),
   gst_final: numeric({ precision: 10, scale: 2 }),
   gst_discount_final: numeric({ precision: 10, scale: 2 }),

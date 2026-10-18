@@ -5,11 +5,14 @@ import UniquePlanSelector from "@/components/home/UniquePlanSelector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
+import Aichat from "@/components/AiChat/Aichat";
 
 export default function Home() {
   return (
     <div className="bg-white dark:bg-[#090909] font-sans text-gray-900 dark:text-[#c1cfc1] min-h-screen selection:bg-amber-400 dark:selection:bg-[#fbbf24] selection:text-white dark:selection:text-[#090909] transition-colors duration-300">
       <Navbar />
+
+      <Aichat/>
 
       <div className="flex flex-col lg:flex-row min-h-[60vh] max-h-[900px] w-11/12 mx-auto mt-12 mb-32 gap-12 relative">
         <div className="flex-1 p-4 lg:mt-24 flex flex-col justify-start z-10">

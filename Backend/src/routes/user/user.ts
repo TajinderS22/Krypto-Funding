@@ -19,7 +19,6 @@ import dotenv from "dotenv";
 import { UserSchema } from "../../validation/userSchema.js";
 import { encrypt } from "../../service/encryption/encrypt.js";
 import { decrypt } from "../../service/encryption/decrypt.js";
-import { createLanguageService } from "typescript";
 import createClient from "../../service/bybit/createClient.js";
 import clients, { getClientKey } from "../../Utils/clients.js";
 
@@ -425,10 +424,10 @@ userRouter.post("/challenges/buy", userMiddleware, async (req, res) => {
         user_id: userId,
         challenge_id: challengeId,
         status: "active",
-        // fully: false,
         current_step: 1,
         steps: challenge.steps ?? 1,
         purchase_id: purchase!.id,
+        value: Number(challenge.value ?? 0),
       })
       .returning();
 
