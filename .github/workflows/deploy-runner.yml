@@ -69,7 +69,7 @@ jobs:
 
 
       # ============================================================
-      # Generate Prisma + Build DB
+      # Generate drizzle + Build DB
       # ============================================================
       - name: Build DB
         run: |
@@ -102,23 +102,28 @@ jobs:
       # ============================================================
       # Verify build artifacts
       # ============================================================
+      
       - name: Verify build
         run: |
           echo "================================"
           echo "Checking build artifacts"
           echo "================================"
-
+      
           echo ""
-          echo "node_modules:"
-          du -sh node_modules
-
+          echo "Backend node_modules:"
+          du -sh Backend/node_modules 
+      
+          echo ""
+          echo "Frontend node_modules:"
+          du -sh frontend/kryptofunding/node_modules 
           echo ""
           echo "Next.js:"
-          du -sh frontend/kryptofunding/.next
-
+          du -sh frontend/kryptofunding/.next 
+      
           echo ""
           echo "HTTP server:"
-          du -sh Backend/dist
+          du -sh Backend/dist 
+
 
 
       # ============================================================
