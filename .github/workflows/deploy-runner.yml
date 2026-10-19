@@ -346,10 +346,6 @@ jobs:
             du -sh .
 
             echo ""
-            echo "node_modules:"
-            du -sh node_modules
-
-            echo ""
             echo "Next.js:"
             du -sh apps/web/.next
 
