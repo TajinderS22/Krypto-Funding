@@ -347,23 +347,11 @@ jobs:
 
             echo ""
             echo "Next.js:"
-            du -sh apps/web/.next
+            du -sh frontend/kryptofunding/.next
 
             echo ""
             echo "HTTP server:"
-            du -sh apps/http-server/dist
-
-            echo ""
-            echo "WebSocket:"
-            du -sh apps/websocket/dist
-
-            echo ""
-            echo "DB:"
-            du -sh packages/db/dist
-
-            echo ""
-            echo "Encryption:"
-            du -sh packages/encryption/dist
+            du -sh Backend/dist
 
             echo ""
             echo ".env:"
