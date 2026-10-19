@@ -1,0 +1,405 @@
+name: Deploy on Production
+
+on:
+  push:
+    branches:
+      - tunnel
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================================
+      # Checkout repository
+      # ============================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Bun
+        uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest # or specify a version like "1.3.x"
+      - run: bun install
+      - run: bun test
+
+
+
+      # ============================================================
+      # Setup Node.js
+      # ============================================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+
+      # ============================================================
+      # Check environment
+      # ============================================================
+      - name: Check environment
+        run: |
+          echo "================================"
+          echo "Bun"
+          echo "================================"
+
+
+          bun -v
+
+          echo "================================"
+          echo "Architecture"
+          echo "================================"
+
+          uname -m
+          bun -p "process.arch"
+
+
+      # ============================================================
+      # Install dependencies
+      # ============================================================
+      - name: Install dependencies
+        run: |
+          bun ci
+
+
+
+      # ============================================================
+      # Generate Prisma + Build DB
+      # ============================================================
+      - name: Build DB
+        run: |
+          cd Backend
+
+          bunx drizzle-kit generate
+
+          bun run build
+
+
+      # ============================================================
+      # Build Next.js
+      # ============================================================
+      - name: Build Next.js
+        run: |
+          cd frontend/kryptofunding
+
+          bun run build
+
+      # ============================================================
+      # Build HTTP server
+      # ============================================================
+      - name: Build HTTP server
+        run: |
+          cd Backend
+
+          bun run build
+
+
+      # ============================================================
+      # Verify build artifacts
+      # ============================================================
+      - name: Verify build
+        run: |
+          echo "================================"
+          echo "Checking build artifacts"
+          echo "================================"
+
+          echo ""
+          echo "node_modules:"
+          du -sh node_modules
+
+          echo ""
+          echo "Next.js:"
+          du -sh frontend/kryptofunding/.next
+
+          echo ""
+          echo "HTTP server:"
+          du -sh Backend/dist
+
+
+      # ============================================================
+      # Create complete deployment archive
+      #
+      # This intentionally includes:
+      #
+      # .git
+      # .github
+      # source code
+      # node_modules
+      # .next
+      # dist
+      # Prisma generated files
+      # package files
+      # everything else
+      #
+      # Runner does not contain .env, so .env is NOT included.
+      # ============================================================
+      - name: Create deployment archive
+        run: |
+          tar \
+            --exclude='./deploy.tar.gz' \
+            -czf /tmp/kFunding-deploy.tar.gz \
+            .
+
+
+      # ============================================================
+      # Show deployment package size
+      # ============================================================
+      - name: Check deployment package
+        run: |
+          echo "================================"
+          echo "Deployment package"
+          echo "================================"
+
+          ls -lh /tmp/kFunding-deploy.tar.gz
+
+
+      # ============================================================
+      # Setup SSH
+      # ============================================================
+      - name: Setup SSH
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          USER: ${{ secrets.PROD_USER }}
+          KEY: ${{ secrets.PROD_SSH_KEY }}
+
+        run: |
+          echo "$KEY" > key.pem
+
+          chmod 600 key.pem
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          cat >> ~/.ssh/config <<EOF
+          Host prod
+            HostName $HOST
+            User $USER
+            IdentityFile $(pwd)/key.pem
+            StrictHostKeyChecking no
+          EOF
+
+
+      # ============================================================
+      # Upload deployment package
+      # ============================================================
+      - name: Upload deployment package
+        run: |
+          scp \
+            /tmp/kFunding-deploy.tar.gz \
+            prod:/tmp/kFunding-deploy.tar.gz
+
+
+      # ============================================================
+      # Deploy on VM
+      # ============================================================
+      - name: Deploy on VM
+        run: |
+          ssh prod <<'EOF'
+
+            set -e
+
+            APP_DIR="/home/ubuntu/Krypto-Funding"
+
+            echo "================================"
+            echo "Starting deployment"
+            echo "================================"
+
+            mkdir -p "$APP_DIR"
+
+
+            # ========================================================
+            # Preserve production .env
+            # ========================================================
+
+            echo "Preserving production .env..."
+
+            if [ -f "$APP_DIR/.env" ]; then
+              cp "$APP_DIR/.env" /tmp/enchat-production.env
+              echo ".env backed up."
+            else
+              echo "No existing .env found."
+            fi
+
+
+            # ========================================================
+            # Remove old repository
+            #
+            # Everything is removed EXCEPT .env
+            # ========================================================
+
+            echo "================================"
+            echo "Removing old application"
+            echo "================================"
+
+            find "$APP_DIR" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              ! -name ".env" \
+              -exec rm -rf {} +
+
+
+            # ========================================================
+            # Extract new deployment
+            # ========================================================
+
+            echo "================================"
+            echo "Extracting new deployment"
+            echo "================================"
+
+            tar \
+              -xzf /tmp/kFunding-deploy.tar.gz \
+              -C "$APP_DIR"
+
+
+            # ========================================================
+            # Remove uploaded archive
+            # ========================================================
+
+            rm -f /tmp/kFunding-deploy.tar.gz
+
+
+            # ========================================================
+            # Restore production .env
+            # ========================================================
+
+            echo "================================"
+            echo "Restoring production .env"
+            echo "================================"
+
+            if [ -f /tmp/enchat-production.env ]; then
+
+              cp \
+                /tmp/enchat-production.env \
+                "$APP_DIR/.env"
+
+              rm -f /tmp/enchat-production.env
+
+              echo ".env restored."
+
+            else
+
+              echo "WARNING: No production .env was found."
+
+            fi
+
+
+            # ========================================================
+            # Enter application directory
+            # ========================================================
+
+            cd "$APP_DIR"
+
+
+            # ========================================================
+            # Setup Node
+            #
+            # No installation/build happens here.
+            # This is only to make sure PM2 uses Node 24.
+            # ========================================================
+
+            export NVM_DIR="$HOME/.nvm"
+
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              source "$NVM_DIR/nvm.sh"
+              nvm use 24
+            fi
+
+
+            # ========================================================
+            # Verify Node
+            # ========================================================
+
+            echo "================================"
+            echo "Node environment"
+            echo "================================"
+
+            node -v
+            npm -v
+
+            echo "Architecture:"
+            uname -m
+
+            echo "Node architecture:"
+            node -p "process.arch"
+
+
+            # ========================================================
+            # Verify deployed files
+            # ========================================================
+
+            echo "================================"
+            echo "Verifying deployment"
+            echo "================================"
+
+            echo ""
+            echo "Repository:"
+            du -sh .
+
+            echo ""
+            echo "node_modules:"
+            du -sh node_modules
+
+            echo ""
+            echo "Next.js:"
+            du -sh apps/web/.next
+
+            echo ""
+            echo "HTTP server:"
+            du -sh apps/http-server/dist
+
+            echo ""
+            echo "WebSocket:"
+            du -sh apps/websocket/dist
+
+            echo ""
+            echo "DB:"
+            du -sh packages/db/dist
+
+            echo ""
+            echo "Encryption:"
+            du -sh packages/encryption/dist
+
+            echo ""
+            echo ".env:"
+            if [ -f ".env" ]; then
+              echo ".env exists"
+            else
+              echo "WARNING: .env does not exist"
+            fi
+
+
+            # ========================================================
+            # Restart PM2
+            # ========================================================
+
+            echo "================================"
+            echo "Restarting PM2"
+            echo "================================"
+
+            pm2 restart all
+
+
+            # ========================================================
+            # PM2 status
+            # ========================================================
+
+            echo "================================"
+            echo "PM2 status"
+            echo "================================"
+
+            pm2 status
+
+
+            # ========================================================
+            # Deployment complete
+            # ========================================================
+
+            echo "================================"
+            echo "Deployment complete!"
+            echo "================================"
+
+          EOF
